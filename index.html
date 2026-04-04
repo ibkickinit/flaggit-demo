@@ -88,6 +88,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 #app{display:flex;flex-direction:column;height:100dvh;max-width:520px;margin:0 auto;position:relative;}
 
 /* ── HEADER ── */
+.demo-banner{
+  background:var(--amber);color:#000;
+  font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2px;
+  text-align:center;padding:5px 12px;flex-shrink:0;
+}
+html.light .demo-banner{background:#c07800;color:#fff;}
 .hdr{
   background:var(--hdr-bg);
   border-bottom:2px solid var(--amber);
@@ -96,12 +102,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   flex-shrink:0;
   position:relative;
 }
-.demo-banner{
-  background:var(--amber);color:#000;
-  font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2px;
-  text-align:center;padding:5px 12px;flex-shrink:0;
-}
-html.light .demo-banner{background:#c07800;color:#fff;}
 .hdr-stripe{
   width:5px;height:36px;flex-shrink:0;
   background:repeating-linear-gradient(180deg,#333 0,#333 3px,#111 3px,#111 6px);
@@ -241,6 +241,11 @@ select option{background:#111;}
 .qi-prev{background:none;border:none;color:var(--text3);cursor:pointer;padding:2px 4px;transition:color .12s;display:flex;align-items:center;}
 .qi-prev.active{color:var(--amber);}
 .btn-print-sel{background:var(--amber);color:#000;border-color:var(--amber);font-weight:700;}
+.dom-ctrl{display:flex;border:1px solid var(--border2);border-radius:3px;overflow:hidden;margin-top:8px;}
+.dom-btn{flex:1;background:none;border:none;border-right:1px solid var(--border2);color:var(--text3);font-family:var(--mono);font-size:10px;letter-spacing:1px;padding:7px 4px;cursor:pointer;transition:all .12s;text-align:center;}
+.dom-btn:last-child{border-right:none;}
+.dom-btn.active{background:var(--amber-bg);color:var(--amber);font-weight:700;}
+html.light .dom-btn.active{background:#fff3d0;}
 .printed-divider{
   display:flex;align-items:center;gap:8px;margin:14px 0 8px;
   font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;
@@ -723,6 +728,11 @@ input[type=range]::-moz-range-thumb{
           <div class="field">
             <label class="flbl">Line 1 — Fixed Label</label>
             <input type="text" id="tl-line1" value="LED WALL" oninput="this.value=this.value.toUpperCase();updatePreview()" placeholder="LED WALL · CAM · POWER"/>
+            <div class="dom-ctrl">
+              <button class="dom-btn active" id="dom-l1" onclick="setDominance('l1')">L1 BIG</button>
+              <button class="dom-btn" id="dom-eq" onclick="setDominance('equal')">EQUAL</button>
+              <button class="dom-btn" id="dom-l2" onclick="setDominance('l2')">L2 BIG</button>
+            </div>
           </div>
           <div class="divider"></div>
           <div class="field">
@@ -803,6 +813,13 @@ input[type=range]::-moz-range-thumb{
           </div>
           <div id="mb-options" style="display:none;">
             <div class="divider"></div>
+            <div class="field">
+              <label class="flbl">Style</label>
+              <div class="dom-ctrl">
+                <button class="dom-btn active" id="mb-style-perp" onclick="setMBStyle('perp')">PERP — flag tip band</button>
+                <button class="dom-btn" id="mb-style-inline" onclick="setMBStyle('inline')">INLINE — append to text</button>
+              </div>
+            </div>
             <div class="field">
               <label class="flbl">Labels</label>
               <div class="row2">
@@ -1029,6 +1046,7 @@ function clampRange(startId, endId, changed) {
   if (changed_val) updatePreview();
 }
 let mbEnabled = false;
+let mbStyle = 'perp'; // 'perp' | 'inline'
 let showNameEnabled = false;
 let showNameInvert = false;
 let cutEnabled = true;
@@ -1042,6 +1060,7 @@ let qpOpenIdx = -1;
 let printed = [];
 let printedSelected = new Set();
 let qpOpenPrintedIdx = -1;
+let tlDominance = 'l1'; // 'l1' | 'equal' | 'l2'
 let printerStatus = 'unknown';
 let toastTimer = null;
 
@@ -1111,6 +1130,15 @@ function renderANSeries() {
   const t = document.getElementById('an-stype').value;
   document.getElementById('an-num-fields').style.display = t === 'numeric' ? '' : 'none';
   document.getElementById('an-alpha-fields').style.display = t === 'alpha' ? '' : 'none';
+}
+
+function setDominance(val) {
+  tlDominance = val;
+  ['l1','eq','l2'].forEach(k => {
+    const btn = document.getElementById('dom-' + k);
+    if (btn) btn.className = 'dom-btn' + (k === (val === 'equal' ? 'eq' : val) ? ' active' : '');
+  });
+  updatePreview();
 }
 
 function renderTLSeries() {
@@ -1242,6 +1270,12 @@ function updatePreview() {
 // ═══════════════════════════════════════════════════
 //  MAIN / BACKUP
 // ═══════════════════════════════════════════════════
+function setMBStyle(val) {
+  mbStyle = val;
+  document.getElementById('mb-style-perp').className  = 'dom-btn' + (val === 'perp'   ? ' active' : '');
+  document.getElementById('mb-style-inline').className = 'dom-btn' + (val === 'inline' ? ' active' : '');
+  updatePreview();
+}
 function toggleMB() {
   mbEnabled = !mbEnabled;
   document.getElementById('tgl-mb').className = 'tgl' + (mbEnabled ? ' on' : '');
@@ -1289,7 +1323,7 @@ function addToQueue() {
   const copies = parseInt(document.getElementById('copies').value) || 1;
   const mainText = (document.getElementById('mb-main-text') ? document.getElementById('mb-main-text').value : 'MAIN') || 'MAIN';
   const backText = (document.getElementById('mb-back-text') ? document.getElementById('mb-back-text').value : 'BACKUP') || 'BACKUP';
-  const mbStyle = 'perp';
+  // mbStyle is the global state variable
 
   let added = 0;
 
@@ -1297,16 +1331,16 @@ function addToQueue() {
     if (mbEnabled) {
       // Generate MAIN copy/copies then BACKUP copy/copies — paired
       for (let c = 0; c < copies; c++) {
-        queue.push(buildQueueItem(item, mainText, mbStyle, 'main'));
+        queue.push(buildQueueItem(item, mainText, 'main'));
         added++;
       }
       for (let c = 0; c < copies; c++) {
-        queue.push(buildQueueItem(item, backText, mbStyle, 'back'));
+        queue.push(buildQueueItem(item, backText, 'back'));
         added++;
       }
     } else {
       for (let c = 0; c < copies; c++) {
-        queue.push(buildQueueItem(item, null, null, null));
+        queue.push(buildQueueItem(item, null, null));
         added++;
       }
     }
@@ -1351,12 +1385,28 @@ function snapshotForm() {
     tlAnPrefix: g('tl-an-prefix'),
     tlAnStart: g('tl-an-start'),
     tlAnEnd: g('tl-an-end'),
+    tlDominance: tlDominance,
+    mbStyle: mbStyle,
   };
 }
 
-function buildQueueItem(item, mbText, mbStyle, mbType) {
+function buildQueueItem(item, mbText, mbType) {
   let displayLine1 = item.line1;
   let displayLine2 = item.twoLine ? item.line2 : null;
+  let perpText = null;
+
+  if (mbText) {
+    if (mbStyle === 'inline') {
+      // Append to line2 if two-line, otherwise to line1
+      if (displayLine2 !== null) {
+        displayLine2 = displayLine2 + ' ' + mbText;
+      } else {
+        displayLine1 = displayLine1 + ' ' + mbText;
+      }
+    } else {
+      perpText = mbText; // perp band at flag tip
+    }
+  }
 
   return {
     id: Date.now() + Math.random(),
@@ -1364,12 +1414,14 @@ function buildQueueItem(item, mbText, mbStyle, mbType) {
     line2: displayLine2,
     twoLine: !!(displayLine2),
     mbType: mbType,
-    mbText: mbText || null,
+    mbText: perpText,
+    mbStyle: mbStyle,
     perpMode: true,
     cablePad: cablePad,
     fontSize: fontSize,
     labelPadding: labelPadding,
     bold: boldEnabled,
+    tlDominance: tlDominance,
     showName: showNameEnabled ? (document.getElementById('sn-text').value.trim().toUpperCase() || null) : null,
     showNameInvert: showNameEnabled && showNameInvert,
     formSnapshot: snapshotForm(),
@@ -1496,10 +1548,11 @@ function loadPreset(idx) {
   // Bold (global flag only — no DOM toggle)
   boldEnabled = !!item.bold;
 
-  // MB toggle + text
-  mbEnabled = !!(item.mbText);
+  // MB toggle + style + text
+  mbEnabled = !!(item.mbText || item.mbStyle);
   el('tgl-mb').className = 'tgl' + (mbEnabled ? ' on' : '');
   el('mb-options').style.display = mbEnabled ? '' : 'none';
+  setMBStyle(item.mbStyle || 'perp');
   if (item.mbText) {
     if (item.mbType === 'main' && el('mb-main-text')) el('mb-main-text').value = item.mbText;
     if (item.mbType === 'back' && el('mb-back-text')) el('mb-back-text').value = item.mbText;
@@ -1548,6 +1601,8 @@ function loadPreset(idx) {
     sv('tl-an-prefix', snap.tlAnPrefix);
     sv('tl-an-start', snap.tlAnStart);
     sv('tl-an-end', snap.tlAnEnd);
+    setDominance(snap.tlDominance || 'l1');
+    setMBStyle(snap.mbStyle || 'perp');
   }
 
   switchTab('build');
@@ -1635,7 +1690,6 @@ async function printQueue() {
   fab.disabled = true;
   fab.querySelector('span').textContent = 'Printing…';
 
-  // Simulate print delay
   await new Promise(r => setTimeout(r, 1500));
 
   showToast('⚡ Demo — simulated ' + toPrint.length + ' label' + (toPrint.length !== 1 ? 's' : '') + ' ✓');
@@ -1668,7 +1722,13 @@ function drawFlag(line1, line2) {
   const flagBody = document.querySelector('.flag-body');
   if (!el1) return;
 
-  const mbText = mbEnabled ? ((document.getElementById('mb-main-text') ? document.getElementById('mb-main-text').value : 'MAIN') || 'MAIN') : null;
+  const rawMbText = mbEnabled ? ((document.getElementById('mb-main-text') ? document.getElementById('mb-main-text').value : 'MAIN') || 'MAIN') : null;
+  // Inline mode: append MB text to label text, no perp band
+  if (rawMbText && mbStyle === 'inline') {
+    if (line2 && String(line2).trim()) line2 = String(line2).toUpperCase() + ' ' + rawMbText;
+    else line1 = String(line1).toUpperCase() + ' ' + rawMbText;
+  }
+  const mbText = (rawMbText && mbStyle === 'perp') ? rawMbText : null;
   const hasTwo = !!(line2 && String(line2).trim());
 
   // Scale: preview scene width (200px) represents tape width (320px)
@@ -1676,10 +1736,12 @@ function drawFlag(line1, line2) {
   const availW = scene ? scene.offsetWidth : 200;
 
   // Font size: proportional to tape width in preview (no px cap)
-  // Single line fills ~94% of tape width; two-line line1 fills ~62%, line2 fills ~30%
-  // Map full slider range (200-500) to full font range (10% tape fill → 100% tape fill)
-  const fsByTape1 = hasTwo ? Math.round(availW * 0.62) : Math.round(availW * 0.94);
-  const fsByTape2 = Math.round(availW * 0.30);
+  // Dominance ratios for two-line mode
+  const dom = hasTwo ? tlDominance : 'l1';
+  const r1 = dom === 'l2' ? 0.30 : dom === 'equal' ? 0.46 : 0.62;
+  const r2 = dom === 'l1' ? 0.30 : dom === 'equal' ? 0.46 : 0.62;
+  const fsByTape1 = hasTwo ? Math.round(availW * r1) : Math.round(availW * 0.94);
+  const fsByTape2 = Math.round(availW * r2);
   const sliderFrac = (fontSize - 200) / (500 - 200);  // 0.0 at min, 1.0 at max
   const fs1 = Math.max(8, Math.round(fsByTape1 * (0.1 + 0.9 * sliderFrac)));
   const fs2 = Math.max(6, Math.round(fsByTape2 * (0.1 + 0.9 * sliderFrac)));
@@ -1798,8 +1860,11 @@ function drawQueueFlag(item) {
 
   const scale = 200 / 320;
   const availW = scene ? scene.offsetWidth : 200;
-  const fsByTape1 = hasTwo ? Math.round(availW * 0.62) : Math.round(availW * 0.94);
-  const fsByTape2 = Math.round(availW * 0.30);
+  const dom = hasTwo ? (item.tlDominance || 'l1') : 'l1';
+  const r1 = dom === 'l2' ? 0.30 : dom === 'equal' ? 0.46 : 0.62;
+  const r2 = dom === 'l1' ? 0.30 : dom === 'equal' ? 0.46 : 0.62;
+  const fsByTape1 = hasTwo ? Math.round(availW * r1) : Math.round(availW * 0.94);
+  const fsByTape2 = Math.round(availW * r2);
   const sliderFrac = (fs - 200) / (500 - 200);
   const fs1 = Math.max(8, Math.round(fsByTape1 * (0.1 + 0.9 * sliderFrac)));
   const fs2 = Math.max(6, Math.round(fsByTape2 * (0.1 + 0.9 * sliderFrac)));
