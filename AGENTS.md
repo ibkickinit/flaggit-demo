@@ -71,7 +71,7 @@ POST /print
 | File | Role |
 |---|---|
 | `flaggit.html` | Real UI. Talks to the relay. Deployed to `/root/flaggit.html`. |
-| `index.html` | Demo UI — print is simulated. Byte-identical to the vault's `flaggit-demo.html`. Named `index.html` so GitHub Pages serves it. |
+| `index.html` | Demo UI — print is simulated. Refactored: printer profiles, mm geometry, one renderer. No longer byte-identical to the vault's `flaggit-demo.html`. Named `index.html` so GitHub Pages serves it. |
 | `flaggit-combined.py` | Relay server: HTTP on :9000, Pillow rasteriser, Star raster encoder, TCP to printer. |
 | `README.md` | Full feature and implementation reference, including a "Key Implementation Details" section documenting preview↔server parity. |
 | `docs/MARKETING.md` | Positioning copy and v1.0 release notes. |
@@ -144,13 +144,47 @@ Verified by reading the code. Demo-only items do not affect the deployed app.
    config file or env override.
 10. Settings panel markup has one unclosed `<div class="card">`.
 
-**Demo only** (`index.html`) — regressions from stripping the real app, not bugs upstream:
-- `saveSettings()` writes to `hdr-ip`, which the demo deleted from the DOM, so it
-  throws on every call and settings never persist. `loadSettings()` has the same
-  dead reference inside a `try`, so it silently bails.
-- `toggleCut` / `toggleBold` reference `tgl-cut` / `tgl-bold`, which do not exist.
-- `showQueuePreview` / `closeQueuePreview` reference the removed `qp-sheet` bottom
-  sheet. Superseded by the inline preview panel.
+**Demo (`index.html`) — refactored, these are now fixed there but still live in
+`flaggit.html` and the relay.** The demo is the reference implementation for the
+port; `flaggit.html` has not been touched because the router copy is canonical and
+unverified.
+
+Fixed in the demo:
+- One `renderFlag()` replaces `drawFlag` + `drawQueueFlag`. Geometry maths exists
+  once. `buildSpecFromState()` makes the build panel's implicit read of live state
+  explicit; `specFromQueueItem()` does the same for a queue row.
+- `PRINTER_PROFILES` holds every printer-specific number. The preview scene scales
+  to `printableWidthMm`, so a Brother flag actually looks narrower than a Star one.
+- Geometry is stored in mm; `mmToDots()` is the only conversion. Values reproduce
+  the relay's dot constants exactly at 203 dpi.
+- Selection is keyed on `item.id`. Deleting an earlier row no longer re-points a
+  selection at a different label.
+- Text Size reports real cap height in mm from the active profile, and shows both
+  line heights when the width is split (`6.4 / 3.1mm`) so the unreadable second
+  line is visible rather than hidden behind one number.
+- Narrow media stacks two lines **along the feed** at full height instead of
+  splitting the width. `tlDominance` keeps the user's intent; the renderer decides
+  what is achievable, so switching back to wide media restores their choice.
+- State lives in one `appState` object, exposed on `window` for field debugging
+  from a phone console.
+- Dead code removed: `toggleCut`/`toggleBold`, `showQueuePreview`/
+  `closeQueuePreview`, the `qp-sheet` bottom-sheet CSS, `.flag-tape`, the dead
+  `hdr-ip` writes that made `saveSettings()` throw on every call.
+- Unclosed `<div class="card">` closed. `cfg-width` replaced by the profile select.
+- Queue text is escaped before `innerHTML`. Legacy localStorage items are migrated
+  (ids assigned, dot geometry converted and snapped to a cable preset).
+- Print history is no longer hidden when the queue empties.
+- Settings said "StarWebPRNT" / port 80. It is `ESC * r` raster over TCP 9100 to
+  the relay on :9000. Corrected.
+
+Still open in the demo:
+- `sep` (the cable-wrap gap) and the two-mirrored-halves double-sided layout are
+  not modelled in the preview at all — it draws one face. The relay prints both.
+- No N-up imposition for `layout: 'sheet'` profiles; Rollo 4 in only warns.
+- `brother-24` keeps `allowTwoLineSideBySide: true`, but the arithmetic argues
+  against it: side by side gives 6.4 / 3.1 mm where stacking gives 9.7 mm on both.
+  Stacking costs length (and Brother feeds 24.5 mm per label regardless), so this
+  is a real trade rather than an oversight. Flip the flag to change it.
 
 ## JS baseline — open decision
 
