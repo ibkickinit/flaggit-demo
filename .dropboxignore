@@ -1,0 +1,78 @@
+# Dropbox ignore for the Flaggit repo (copied from /_PROJECTS/.dropboxignore.template)
+# MODEL: .git/ intentionally SYNCS (whole repo travels together across machines).
+# This file excludes everything a machine can regenerate.
+# Never delete .git/ from the Dropbox cloud.
+
+# === NOT excluded (deliberate) ===
+# .git/   <- stays syncing. This is the cross-machine transport.
+
+# === Node / JS / TS ===
+node_modules/
+.next/
+.nuxt/
+.svelte-kit/
+.turbo/
+.vercel/
+.parcel-cache/
+.npm/
+.yarn/
+.pnp.*
+
+# === Build outputs ===
+dist/
+build/
+out/
+target/
+*.tsbuildinfo
+
+# === FPGA / Vivado / Xilinx (Schindler et al.) ===
+*.bit
+*.runs
+*.cache
+*.hw
+*.sim
+*.jou
+*.backup.log
+.Xil/
+xsim.dir/
+artifacts/
+build_logs/
+vivado*.log
+
+# === Xcode / native (TestPattern) ===
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# === Caches / coverage / logs ===
+.cache/
+.eslintcache
+.stylelintcache
+coverage/
+*.log
+
+# === Secrets (never sync) ===
+.env
+.env.local
+.env.*.local
+
+# === OS / editor ===
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === Misc ===
+*.tmp
+*.temp
