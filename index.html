@@ -1015,7 +1015,10 @@ const PRINTER_PROFILES = {
     label: 'Star TSP143IV SK — 40 mm linerless',
     dpi: 203,
     mediaWidthMm: 40,
-    printableWidthMm: 40,      // TODO verify: SAFE_W=270 in the relay implies ~33.8 mm
+    // UNVERIFIED-1 (see AGENTS.md). Held at 40 by decision until an edge-to-edge
+    // test print is measured. The relay's SAFE_W=270 implies ~33.8 mm, which
+    // would shrink every Star figure below and narrow the Star/Brother gap.
+    printableWidthMm: 40,
     edgeOffsetMm: 0,
     minFeedMm: 0,              // continuous roll, no per-label minimum
     maxLengthMm: null,         // unbounded
@@ -1078,7 +1081,7 @@ const PRINTER_PROFILES = {
     minFeedMm: 0,
     maxLengthMm: 152,          // 6 in die-cut; gap-sensing, so length is fixed
     layout: 'rotated-paddle',
-    transport: 'usb-or-ipp',
+    transport: 'usb-wifi-airprint',   // X1040 confirmed: WiFi + AirPrint/IPP, not the USB-only X1038
     mediaType: 'direct-thermal-on-liner',
     selfAdhering: false,       // paper on liner — will not self-adhere for a fold
     defaultTwoLineLayout: 'side-by-side',
@@ -1092,7 +1095,7 @@ const PRINTER_PROFILES = {
     minFeedMm: 0,
     maxLengthMm: 152,
     layout: 'sheet',           // wants N-up imposition, not a single flag
-    transport: 'usb-or-ipp',
+    transport: 'usb-wifi-airprint',   // X1040 confirmed: WiFi + AirPrint/IPP, not the USB-only X1038
     mediaType: 'direct-thermal-on-liner',
     selfAdhering: false,
     defaultTwoLineLayout: 'side-by-side',
@@ -1115,7 +1118,9 @@ const GEOM = {
   showNameGapMm: 0.75,        // relay SN_GAP
   singleLineFill: 0.94,       // fraction of printable width one line may occupy
   bandFill: 0.22,             // MAIN/BACKUP and show-name band height
-  capHeightRatio: 0.72,       // Barlow Condensed cap height ÷ em. TODO verify on a print.
+  // UNVERIFIED-2 (see AGENTS.md). Barlow Condensed cap height ÷ em, assumed.
+  // Every cap-height figure the UI reports scales off this one number.
+  capHeightRatio: 0.72,
   centringNudgePx: 8,         // compensates Barlow Condensed's left side bearing
 };
 

@@ -275,6 +275,28 @@ OTG (no app, no bridge). iOS cannot — Safari does not implement WebUSB on any
 platform and WebKit's position is "opposed". The router already being the app host
 plus print bridge is the only path that covers every phone and every printer.
 
+## Pending hardware verification
+
+Five things the code currently assumes. Each is **held at its current value by
+decision**, not by oversight — the author has the hardware and will test when
+able. Do not quietly "fix" any of them from a guess; if you change one, change it
+because it was measured. Code sites are marked `UNVERIFIED-n`.
+
+| # | Assumption | Current value | The test | What changes if it is wrong |
+|---|---|---|---|---|
+| 1 | Star 40 mm printable width | `printableWidthMm: 40` | Print edge to edge on 40 mm linerless and measure the ink | The relay's `SAFE_W = 270` implies ~33.8 mm. If so, every Star figure shrinks and the Star→Brother drop is far smaller than the 55% quoted elsewhere in this file |
+| 2 | Barlow Condensed cap height ÷ em | `capHeightRatio: 0.72` | Measure cap height against em size on a real print | Every cap-height number the UI reports scales off this. Bench-test item, deferred with 1 |
+| 3 | PT-P710BT USB interface class | assumed USB printer class 7 | `system_profiler SPUSBDataType \| grep -A12 -i "p-touch"` on macOS | Class 7 → `/dev/usb/lp0` appears and the router bridge is ~15 lines of shell. Vendor-specific → needs a compiled libusb program instead. **Decides the bridge architecture.** Author confirmed USB (not Bluetooth) is the intended transport; testing next week |
+| 4 | Brother iOS SDK covers this model | unknown | Download the Brother Print SDK and grep `BRLMPrinterModel` for `P710` | Absent → native iOS is dead for the P710BT even with a paid Developer ID, and the router bridge becomes the only iPhone path |
+| 5 | Router copy vs vault copy | assumed close enough | Sync from the router and diff all three files | **Gates the entire `flaggit.html` port.** Also resolves which printer address is real: the relay says `192.168.100.101`, the UI defaults to `192.168.8.100` |
+
+**Settled, do not re-litigate:**
+- Rollo model is the **X1040** — WiFi + AirPrint/IPP, not the USB-only X1038.
+  Both Rollo profiles carry `transport: 'usb-wifi-airprint'`.
+- Transport for the Brother is **USB**, not Bluetooth Classic. A USB-A port on
+  the GL.iNet plus `kmod-usb-printer` beats pairing and `rfcomm bind` by a wide
+  margin, and the printer has a USB port anyway.
+
 ## Gotchas
 
 - **Router is canonical.** Sync before editing, deploy after.
