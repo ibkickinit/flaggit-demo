@@ -443,6 +443,24 @@ input[type=range]::-moz-range-thumb{
   overflow:hidden;
 }
 
+/* The blank leader the tape spends wrapping the cable before any text starts.
+   Drawn so the relationship between cable, wrap and text is visible at a glance. */
+.flag-wrap-zone{
+  position:absolute;top:0;left:0;right:0;
+  pointer-events:none;
+  background:repeating-linear-gradient(45deg,
+    rgba(0,0,0,0.055) 0, rgba(0,0,0,0.055) 3px,
+    transparent 3px, transparent 7px);
+  border-bottom:1px dashed rgba(0,0,0,0.28);
+  display:flex;align-items:flex-end;justify-content:center;
+  overflow:hidden;
+}
+.flag-wrap-zone span{
+  font-family:'Share Tech Mono',monospace;
+  font-size:8px;letter-spacing:.5px;color:rgba(0,0,0,0.45);
+  padding-bottom:2px;white-space:nowrap;
+}
+
 .flag-text-wrap{
   display:flex;
   flex-direction:column;
@@ -693,6 +711,10 @@ input[type=range]::-moz-range-thumb{
             <label class="flbl">Line 1 — Fixed Label</label>
             <input type="text" id="tl-line1" value="LED WALL" oninput="this.value=this.value.toUpperCase();updatePreview()" placeholder="LED WALL · CAM · POWER"/>
             <div class="dom-ctrl">
+              <button class="dom-btn active" id="tll-side" onclick="setTwoLineLayout('side-by-side')">SIDE BY SIDE</button>
+              <button class="dom-btn" id="tll-stack" onclick="setTwoLineLayout('stacked')">STACKED</button>
+            </div>
+            <div class="dom-ctrl">
               <button class="dom-btn active" id="dom-l1" onclick="setDominance('l1')">L1 BIG</button>
               <button class="dom-btn" id="dom-eq" onclick="setDominance('equal')">EQUAL</button>
               <button class="dom-btn" id="dom-l2" onclick="setDominance('l2')">L2 BIG</button>
@@ -838,6 +860,7 @@ input[type=range]::-moz-range-thumb{
             <div class="flag-scene" id="flag-scene">
               <div class="flag-cable"></div>
               <div class="flag-body" id="flag-body">
+                <div class="flag-wrap-zone" id="flag-wrap-zone"><span></span></div>
                 <div class="flag-text-wrap" id="flag-text-wrap">
                   <div class="flag-line1" id="flag-line1">A</div>
                   <div class="flag-line2" id="flag-line2" style="display:none;"></div>
@@ -863,8 +886,12 @@ input[type=range]::-moz-range-thumb{
             </select>
           </div>
           <div class="field">
-            <label class="flbl">Cable Size</label>
-            <select id="cable-size" onchange="onSliderChange()"><!-- options from CABLE_PRESETS --></select>
+            <div class="slider-row">
+              <label class="flbl">Cable Diameter</label>
+              <span class="slider-val" id="cable-size-val">&mdash;</span>
+            </div>
+            <input type="range" id="cable-size" min="3" max="32" value="8" step="0.5" oninput="onSliderChange()"/>
+            <div id="cable-hint" style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:3px;letter-spacing:.5px;"></div>
           </div>
           <div class="field">
             <div class="slider-row">
@@ -996,7 +1023,7 @@ const PRINTER_PROFILES = {
     transport: 'tcp-9100',
     mediaType: 'linerless-direct-thermal',
     selfAdhering: true,        // sticks to itself — the wrap-fold flag works natively
-    allowTwoLineSideBySide: true,
+    defaultTwoLineLayout: 'side-by-side',
   },
   'brother-24': {
     label: 'Brother PT-P710BT — 24 mm TZe-FX',
@@ -1010,7 +1037,9 @@ const PRINTER_PROFILES = {
     transport: 'usb-or-bt-spp',
     mediaType: 'laminated-tape',
     selfAdhering: true,        // TZe-FX only; standard TZe is not rated for this
-    allowTwoLineSideBySide: true,   // 11.2 / 5.4 mm — marginal, prefer EQUAL
+    // Side by side fits, but splits to 11.2 / 5.4 mm; stacking gives 9.7 mm on
+    // both for a longer label. Default to stacked, offer both.
+    defaultTwoLineLayout: 'stacked',
   },
   'brother-18': {
     label: 'Brother PT-P710BT — 18 mm TZe-FX',
@@ -1024,7 +1053,7 @@ const PRINTER_PROFILES = {
     transport: 'usb-or-bt-spp',
     mediaType: 'laminated-tape',
     selfAdhering: true,
-    allowTwoLineSideBySide: false,
+    defaultTwoLineLayout: 'stacked',
   },
   'brother-12': {
     label: 'Brother PT-P710BT — 12 mm TZe-FX',
@@ -1038,7 +1067,7 @@ const PRINTER_PROFILES = {
     transport: 'usb-or-bt-spp',
     mediaType: 'laminated-tape',
     selfAdhering: true,
-    allowTwoLineSideBySide: false,  // 6.1 / 3.0 mm — unusable
+    defaultTwoLineLayout: 'stacked',   // side by side splits to 6.1 / 3.0 mm
   },
   'rollo-2': {
     label: 'Rollo X1040 — 2 in die-cut',
@@ -1052,7 +1081,7 @@ const PRINTER_PROFILES = {
     transport: 'usb-or-ipp',
     mediaType: 'direct-thermal-on-liner',
     selfAdhering: false,       // paper on liner — will not self-adhere for a fold
-    allowTwoLineSideBySide: true,
+    defaultTwoLineLayout: 'side-by-side',
   },
   'rollo-4': {
     label: 'Rollo X1040 — 4 in die-cut',
@@ -1066,7 +1095,7 @@ const PRINTER_PROFILES = {
     transport: 'usb-or-ipp',
     mediaType: 'direct-thermal-on-liner',
     selfAdhering: false,
-    allowTwoLineSideBySide: true,
+    defaultTwoLineLayout: 'side-by-side',
   },
 };
 
@@ -1102,12 +1131,38 @@ const DOMINANCE_RATIOS = {
 // same mapping, so the range is protocol, not preference.
 const SLIDER = { min: 200, max: 500, heightFloor: 0.10, heightSpan: 0.90 };
 
-// Cable wrap presets, in real diameter-driven mm (was 50/100/200 dots).
-const CABLE_PRESETS = {
-  small:  { mm: 6.25,  label: 'Small — XLR, Ethernet, Coax' },
-  medium: { mm: 12.5,  label: 'Medium — Edison, True1' },
-  large:  { mm: 25.0,  label: 'Large — Soca, Camlock, Snake' },
+// Cable wrap, derived from diameter rather than picked from presets.
+//
+// The old 50 / 100 / 200 dot presets turn out to be exactly half-circumferences
+// of 4 / 8 / 16 mm cable (within 0.5%), which is the physically right quantity:
+// on a fold-over flag each printed face wraps half the way round. So the control
+// is the cable's diameter and the leader follows from it.
+const CABLE = {
+  minDiameterMm: 3,      // Brother rates TZe-FX for cables 3 mm and up
+  maxDiameterMm: 32,     // Soca / camlock / multicore territory
+  defaultDiameterMm: 8,  // matches the old "Medium — Edison, True1" preset
 };
+
+// Familiar cables at their approximate outside diameter, so the slider reads as
+// something physical rather than a bare number. Nearest match is shown as a hint;
+// these are guides, not constraints — the slider is continuous.
+const CABLE_EXAMPLES = [
+  { mm: 4,  label: 'Cat5 / thin coax' },
+  { mm: 6,  label: 'XLR / mic cable' },
+  { mm: 8,  label: 'Edison / True1' },
+  { mm: 11, label: '12-3 SJOOW' },
+  { mm: 14, label: 'Camlock single' },
+  { mm: 20, label: 'Soca / multicore' },
+  { mm: 28, label: 'Feeder / banded set' },
+];
+
+function nearestCableExample(mm) {
+  return CABLE_EXAMPLES.reduce(
+    (best, c) => Math.abs(c.mm - mm) < Math.abs(best.mm - mm) ? c : best, CABLE_EXAMPLES[0]);
+}
+
+function cablePadMmForDiameter(diameterMm) { return Math.PI * diameterMm / 2; }
+function diameterMmForCablePad(padMm) { return padMm * 2 / Math.PI; }
 
 const PREVIEW = {
   maxSceneWidthPx: 200,
@@ -1129,10 +1184,10 @@ const STORAGE_KEYS = {
 // Two DOM locations render a flag: the build panel and the queue preview panel.
 const FLAG_TARGETS = {
   build: { scene: 'flag-scene', body: 'flag-body', wrap: 'flag-text-wrap',
-           line1: 'flag-line1', line2: 'flag-line2',
+           wrapZone: 'flag-wrap-zone', line1: 'flag-line1', line2: 'flag-line2',
            band: 'flag-mb-bottom', showName: 'flag-show-name' },
   queue: { scene: 'qp-scene', body: 'qp-body', wrap: 'qp-text-wrap',
-           line1: 'qp-line1', line2: 'qp-line2',
+           wrapZone: 'qp-wrap-zone', line1: 'qp-line1', line2: 'qp-line2',
            band: 'qp-mb-bottom', showName: 'qp-show-name' },
 };
 
@@ -1150,7 +1205,9 @@ const appState = {
   cutEnabled: true,
   fontSlider: 430,                  // SLIDER.min..SLIDER.max, wire units
   labelPaddingMm: 0,
-  cablePadMm: CABLE_PRESETS.medium.mm,
+  cableDiameterMm: CABLE.defaultDiameterMm,
+  cablePadMm: cablePadMmForDiameter(CABLE.defaultDiameterMm),
+  twoLineLayout: 'side-by-side',   // 'side-by-side' | 'stacked'
   tlDominance: 'l1',                // 'l1' | 'equal' | 'l2'
   queue: [],
   selectedIds: new Set(),
@@ -1201,14 +1258,11 @@ function previewSceneWidthPx(profile) {
 }
 
 // Two-line side by side splits the printable width, so it dies on narrow media.
-function twoLineSideBySideAllowed(profile) { return profile.allowTwoLineSideBySide; }
-
-// Migrated dot values convert to things like 12.5125 mm, which match no <option>
-// and would blank the select. Snap to the nearest preset.
-function nearestCablePresetMm(mm) {
-  const values = Object.keys(CABLE_PRESETS).map(k => CABLE_PRESETS[k].mm);
-  return values.reduce((best, v) => Math.abs(v - mm) < Math.abs(best - mm) ? v : best, values[0]);
-}
+// Whether the two lines sit across the width or run down the flag. This is the
+// USER's choice, not the printer's: every profile offers both, and the readout
+// shows what each costs. A narrow tape makes side-by-side a bad idea, not an
+// impossible one, and the app should say so rather than decide.
+function twoLineLayoutIsSideBySide() { return appState.twoLineLayout === 'side-by-side'; }
 
 // Queue text is user input rendered through innerHTML. It is their own text on
 // their own device, but a label containing markup should still print, not run.
@@ -1246,28 +1300,37 @@ function saveSettings() {
 function onProfileChange() {
   const next = val('cfg-profile');
   if (PRINTER_PROFILES[next]) appState.profileId = next;
-  // tlDominance is left alone on purpose: it records what the user asked for.
-  // A profile too narrow to split the width is handled in renderFlag, which
-  // stacks the lines along the feed instead. Keeping intent means switching
-  // back to a wide printer restores the user's choice rather than silently
-  // leaving them on a fallback they never picked.
-  syncDominanceAvailability();
+  // Adopt the profile's suggested two-line layout, but only as a starting point
+  // the user can override — a profile suggests, it never forbids. tlDominance is
+  // left alone entirely: it records what the user asked for.
+  setTwoLineLayout(activeProfile().defaultTwoLineLayout || 'side-by-side', true);
   saveSettings();
   updatePreview();
   showToast(activeProfile().label);
 }
 
+// Dominance only means something when the two lines share the width. When they
+// are stacked, all three buttons are moot — so they grey out because of the
+// LAYOUT the user picked, never because of the printer they picked.
 function syncDominanceAvailability() {
-  const allowed = twoLineSideBySideAllowed(activeProfile());
-  ['dom-l1', 'dom-l2'].forEach(id => {
+  const relevant = twoLineLayoutIsSideBySide();
+  ['dom-l1', 'dom-eq', 'dom-l2'].forEach(id => {
     const btn = el(id);
     if (!btn) return;
-    btn.disabled = !allowed;
-    btn.style.opacity = allowed ? '' : '0.35';
-    btn.title = allowed ? '' : activeProfile().printableWidthMm.toFixed(1) +
-      ' mm printable is too narrow to split the width — lines stack along the ' +
-      'flag instead. Your choice is remembered for wider media.';
+    btn.disabled = !relevant;
+    btn.style.opacity = relevant ? '' : '0.35';
+    btn.title = relevant ? '' : 'Stacked lines each use the full width, so there is nothing to split.';
   });
+}
+
+function setTwoLineLayout(value, fromProfile) {
+  appState.twoLineLayout = value === 'stacked' ? 'stacked' : 'side-by-side';
+  const sbs = twoLineLayoutIsSideBySide();
+  const a = el('tll-side'), b = el('tll-stack');
+  if (a) a.className = 'dom-btn' + (sbs ? ' active' : '');
+  if (b) b.className = 'dom-btn' + (sbs ? '' : ' active');
+  syncDominanceAvailability();
+  if (!fromProfile) updatePreview();
 }
 
 // ═══════════════════════════════════════════════════
@@ -1472,6 +1535,7 @@ function buildSpecFromState(item) {
     labelPaddingMm: appState.labelPaddingMm,
     cablePadMm: appState.cablePadMm,
     dominance: appState.tlDominance,
+    twoLineLayout: appState.twoLineLayout,
     bandText: (mbText && appState.mbStyle === 'perp') ? mbText : null,
     showName: appState.showNameEnabled ? (val('sn-text').trim().toUpperCase() || null) : null,
     showNameInvert: appState.showNameEnabled && appState.showNameInvert,
@@ -1487,6 +1551,7 @@ function specFromQueueItem(item) {
     labelPaddingMm: item.labelPaddingMm,
     cablePadMm: item.cablePadMm,
     dominance: item.dominance || 'l1',
+    twoLineLayout: item.twoLineLayout || 'side-by-side',
     bandText: item.bandText || null,
     showName: item.showName || null,
     showNameInvert: !!item.showNameInvert,
@@ -1520,13 +1585,13 @@ function renderFlag(targets, spec) {
 
   // Glyph em heights, as a share of printable width.
   //
-  // Two lines can be laid out two ways. Wide media splits the width and sets them
-  // side by side, which is what the dominance ratios are for. Narrow media cannot:
-  // splitting 9.9 mm gives 6.1 and 3.0 mm and the second line is unreadable. There
-  // we stack them ALONG THE FEED instead — each keeps full height and the label
-  // just gets longer, which is cheap (Brother allows 1000 mm) where width is not.
-  const stackAlongFeed = hasTwo && !twoLineSideBySideAllowed(profile);
-  const sideBySide = hasTwo && !stackAlongFeed;
+  // Two ways to lay out two lines, and the user picks:
+  //   side-by-side — split the width by the dominance ratios; reads compactly
+  //   stacked      — run them down the flag, each at full height; longer label
+  // Narrow media makes side-by-side a poor choice (9.9 mm splits to 6.1 / 3.0)
+  // but not an unavailable one. The profile supplies the default, nothing more.
+  const sideBySide = hasTwo && spec.twoLineLayout !== 'stacked';
+  const stackAlongFeed = hasTwo && !sideBySide;
   const ratios = DOMINANCE_RATIOS[spec.dominance] || DOMINANCE_RATIOS.l1;
   const fill1 = sideBySide ? ratios.line1 : GEOM.singleLineFill;
   const fill2 = sideBySide ? ratios.line2 : GEOM.singleLineFill;
@@ -1563,6 +1628,17 @@ function renderFlag(targets, spec) {
   } else {
     line2El.style.display = 'none';
     line2El.textContent = '';
+  }
+
+  // Show the leader the tape spends on the cable, so the blank space above the
+  // text reads as deliberate rather than as a layout accident.
+  const zoneEl = el(targets.wrapZone);
+  if (zoneEl) {
+    const wrapPx = Math.round(spec.cablePadMm * pxPerMm);
+    zoneEl.style.height = wrapPx + 'px';
+    zoneEl.style.display = wrapPx > 4 ? '' : 'none';
+    const labelEl = zoneEl.querySelector('span');
+    if (labelEl) labelEl.textContent = wrapPx > 16 ? 'WRAP ' + spec.cablePadMm.toFixed(1) + 'mm' : '';
   }
 
   renderBand(bandEl, spec.bandText, sceneWidthPx);
@@ -1634,7 +1710,7 @@ function updatePreview() {
 function updateGeometryReadout(firstItem) {
   const profile = activeProfile();
   const hasTwo = !!(firstItem && firstItem.twoLine);
-  const sideBySide = hasTwo && twoLineSideBySideAllowed(profile);
+  const sideBySide = hasTwo && twoLineLayoutIsSideBySide();
   const fill = sideBySide ? (DOMINANCE_RATIOS[appState.tlDominance] || DOMINANCE_RATIOS.l1).line1
                           : GEOM.singleLineFill;
 
@@ -1655,6 +1731,15 @@ function updateGeometryReadout(firstItem) {
   const padEl = el('padding-val');
   if (padEl) padEl.textContent = appState.labelPaddingMm.toFixed(1) + 'mm';
 
+  const cableEl = el('cable-size-val');
+  if (cableEl) cableEl.textContent = appState.cableDiameterMm.toFixed(1) + 'mm \u00f8';
+
+  const hintEl = el('cable-hint');
+  if (hintEl) {
+    hintEl.textContent = '\u2248 ' + nearestCableExample(appState.cableDiameterMm).label +
+      '  \u00b7  wrap leader ' + appState.cablePadMm.toFixed(1) + 'mm (half circumference)';
+  }
+
   const noteEl = el('flag-profile-note');
   if (noteEl) {
     noteEl.textContent = profile.label + ' · ' + profile.printableWidthMm.toFixed(1) +
@@ -1664,10 +1749,19 @@ function updateGeometryReadout(firstItem) {
   const warnEl = el('flag-profile-warn');
   if (warnEl) {
     const warnings = [];
-    if (hasTwo && !twoLineSideBySideAllowed(profile)) {
-      warnings.push('Too narrow to split ' + profile.printableWidthMm.toFixed(1) +
-        ' mm across two lines — they stack along the flag instead, at full height. ' +
-        'The label gets longer, not smaller.');
+    // Advice, not prohibition: say what the choice costs and let the user decide.
+    if (hasTwo) {
+      const ratios = DOMINANCE_RATIOS[appState.tlDominance] || DOMINANCE_RATIOS.l1;
+      const split2 = capHeightMm(appState.fontSlider, profile, ratios.line2);
+      const full = capHeightMm(appState.fontSlider, profile, GEOM.singleLineFill);
+      if (sideBySide && split2 < 5) {
+        warnings.push('Side by side puts the second line at ' + split2.toFixed(1) +
+          ' mm — hard to read at arm\u2019s length. Stacked would give ' +
+          full.toFixed(1) + ' mm on both, on a longer label.');
+      } else if (!sideBySide) {
+        warnings.push('Stacked: both lines at ' + full.toFixed(1) +
+          ' mm, and the label runs about twice as long as side by side.');
+      }
     }
     if (!profile.selfAdhering) {
       warnings.push('This media is on a liner and will not stick to itself — no wrap-fold flag.');
@@ -1688,7 +1782,8 @@ function onSliderChange() {
   appState.fontSlider = parseInt(val('font-size-slider')) || 430;
   // The padding slider is still in relay dots; convert once, here.
   appState.labelPaddingMm = (parseInt(val('padding-slider')) || 0) / dotsPerMm(profile);
-  appState.cablePadMm = parseFloat(val('cable-size')) || CABLE_PRESETS.medium.mm;
+  appState.cableDiameterMm = parseFloat(val('cable-size')) || CABLE.defaultDiameterMm;
+  appState.cablePadMm = cablePadMmForDiameter(appState.cableDiameterMm);
   updatePreview();
 }
 
@@ -1717,6 +1812,7 @@ function snapshotForm() {
     tlAlphaFrom: val('tl-alpha-from'), tlAlphaTo: val('tl-alpha-to'),
     tlAnPrefix: val('tl-an-prefix'), tlAnStart: val('tl-an-start'), tlAnEnd: val('tl-an-end'),
     tlDominance: appState.tlDominance,
+    twoLineLayout: appState.twoLineLayout,
     mbStyle: appState.mbStyle,
     profileId: appState.profileId,
   };
@@ -1746,6 +1842,8 @@ function buildQueueItem(item, mbText, mbType) {
     mbStyle: appState.mbStyle,
     profileId: appState.profileId,
     cablePadMm: appState.cablePadMm,
+    cableDiameterMm: appState.cableDiameterMm,
+    twoLineLayout: appState.twoLineLayout,
     labelPaddingMm: appState.labelPaddingMm,
     fontSlider: appState.fontSlider,
     bold: appState.boldEnabled,
@@ -1787,6 +1885,7 @@ function previewPanelHtml() {
     '<div class="flag-scene" id="' + t.scene + '">' +
       '<div class="flag-cable"></div>' +
       '<div class="flag-body" id="' + t.body + '">' +
+        '<div class="flag-wrap-zone" id="' + t.wrapZone + '"><span></span></div>' +
         '<div class="flag-text-wrap" id="' + t.wrap + '">' +
           '<div class="flag-line1" id="' + t.line1 + '">—</div>' +
           '<div class="flag-line2" id="' + t.line2 + '" style="display:none;"></div>' +
@@ -1973,14 +2072,16 @@ function loadPreset(id) {
   appState.profileId = item.profileId || DEFAULT_PROFILE_ID;
   appState.fontSlider = item.fontSlider || 430;
   appState.labelPaddingMm = item.labelPaddingMm || 0;
-  appState.cablePadMm = item.cablePadMm != null ? item.cablePadMm : CABLE_PRESETS.medium.mm;
+  appState.cablePadMm = item.cablePadMm != null
+    ? item.cablePadMm : cablePadMmForDiameter(CABLE.defaultDiameterMm);
+  appState.cableDiameterMm = diameterMmForCablePad(appState.cablePadMm);
   appState.boldEnabled = !!item.bold;
 
   if (el('cfg-profile')) el('cfg-profile').value = appState.profileId;
   el('font-size-slider').value = appState.fontSlider;
   el('padding-slider').value = Math.round(appState.labelPaddingMm * dotsPerMm(profile));
-  appState.cablePadMm = nearestCablePresetMm(appState.cablePadMm);
-  el('cable-size').value = String(appState.cablePadMm);
+  el('cable-size').value = String(Math.round(appState.cableDiameterMm * 2) / 2);
+  setTwoLineLayout(item.twoLineLayout || 'side-by-side', true);
 
   appState.mbEnabled = !!(item.bandText || item.mbStyle);
   el('tgl-mb').className = 'tgl' + (appState.mbEnabled ? ' on' : '');
@@ -2020,6 +2121,7 @@ function loadPreset(id) {
     set('tl-an-prefix', snap.tlAnPrefix); set('tl-an-start', snap.tlAnStart);
     set('tl-an-end', snap.tlAnEnd);
     setDominance(snap.tlDominance || 'l1');
+    setTwoLineLayout(snap.twoLineLayout || 'side-by-side', true);
     setMBStyle(snap.mbStyle || 'perp');
   }
 
@@ -2097,9 +2199,9 @@ function migrateItem(item) {
   const profile = PRINTER_PROFILES[item.profileId] || PRINTER_PROFILES[DEFAULT_PROFILE_ID];
   if (item.fontSlider == null) item.fontSlider = item.fontSize || 430;
   if (item.cablePadMm == null) {
-    item.cablePadMm = nearestCablePresetMm(
-      (item.cablePad != null ? item.cablePad : 100) / dotsPerMm(profile));
+    item.cablePadMm = (item.cablePad != null ? item.cablePad : 100) / dotsPerMm(profile);
   }
+  if (item.twoLineLayout == null) item.twoLineLayout = 'side-by-side';
   if (item.labelPaddingMm == null) {
     item.labelPaddingMm = (item.labelPadding || 0) / dotsPerMm(profile);
   }
@@ -2151,10 +2253,10 @@ function populateProfileSelect() {
 function populateCableSelect() {
   const sel = el('cable-size');
   if (!sel) return;
-  sel.innerHTML = Object.keys(CABLE_PRESETS)
-    .map(k => '<option value="' + CABLE_PRESETS[k].mm + '">' + CABLE_PRESETS[k].label + '</option>')
-    .join('');
-  sel.value = String(appState.cablePadMm);
+  sel.min = CABLE.minDiameterMm;
+  sel.max = CABLE.maxDiameterMm;
+  sel.step = 0.5;
+  sel.value = String(appState.cableDiameterMm);
 }
 
 // ═══════════════════════════════════════════════════
@@ -2165,7 +2267,7 @@ loadSettings();
 populateProfileSelect();
 populateCableSelect();
 restoreState();
-syncDominanceAvailability();
+setTwoLineLayout(activeProfile().defaultTwoLineLayout || 'side-by-side', true);
 onSliderChange();     // seeds geometry state from the controls, then previews
 renderQueue();
 switchTab('build');

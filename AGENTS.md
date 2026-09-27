@@ -107,6 +107,7 @@ HALF_H = BASE_PAD + label_padding + text_tape_len
 | `END_PAD` | 10 dots | Free end always this far from the paper end. |
 | `BASE_GAP` | 8 dots | Text→tag gap before `label_padding`. |
 | `LINE_GAP` | 8 dots | Between line1 and line2. |
+| cable wrap | `π × diameter / 2` | The old 50 / 100 / 200 dot presets are exactly half-circumferences of 4 / 8 / 16 mm cable, within 0.5%. Each printed face of a fold-over flag wraps half the way round, so this is the physically right quantity, and the UI control is the diameter. |
 | `SN_GAP` | 6 dots | Before the show-name band. |
 | `PERP_W` | 48 dots | Width of the perpendicular tag strip (horizontal layout only). |
 | `OFFSET_N` / `OFFSET_F` | -25 / +25 | Opposite nudges on the two halves so they align once folded. Also compensates Barlow Condensed centring. |
@@ -178,25 +179,60 @@ Fixed in the demo:
   the relay on :9000. Corrected.
 
 Still open in the demo:
-- `sep` (the cable-wrap gap) and the two-mirrored-halves double-sided layout are
-  not modelled in the preview at all — it draws one face. The relay prints both.
-- No N-up imposition for `layout: 'sheet'` profiles; Rollo 4 in only warns.
-- `brother-24` keeps `allowTwoLineSideBySide: true`, but the arithmetic argues
-  against it: side by side gives 6.4 / 3.1 mm where stacking gives 9.7 mm on both.
-  Stacking costs length (and Brother feeds 24.5 mm per label regardless), so this
-  is a real trade rather than an oversight. Flip the flag to change it.
+- No N-up imposition for `layout: 'sheet'` profiles; Rollo 4 in only warns. Under
+  the rule above this should become a user-selectable layout, not a Rollo-only
+  mode: offer flag and sheet layouts wherever the media can carry them.
+- `brother-24` now *defaults* to stacked, because side by side gives 6.4 / 3.1 mm
+  where stacking gives 9.7 mm on both. Both remain available to the user.
+- Wrap-around (text repeated along the cable, no flag) is not implemented. It is
+  the fourth viable layout and the most durable one for permanent install work.
+- Only one face is drawn in the preview, deliberately: the author asked for an
+  illustration of where the cable sits and the blank leader before the text, not
+  a 3D fold. The hatched `.flag-wrap-zone` band does that. The relay still prints
+  two mirrored halves separated by `sep`, which the preview does not show.
 
-## JS baseline — open decision
+## Audience — this ships to the public
 
-Global standards say ES5 is the default for constrained single-file device apps,
-**explicitly naming GL.iNet routers**. Flaggit runs on a GL.iNet router and the
-current code is ES6+ throughout (`let`/`const`, arrows, template literals,
-`async`/`await`, spread, `Set`, `padStart`).
+Flaggit is not a personal tool. It is intended for other AV / film / broadcast
+techs, not just its author's kit. Two things follow:
 
-In practice the UI runs in mobile Safari / Chrome, not on the router, so ES6+ is
-safe. **This repo's declared baseline is ES6+** — recorded here as a deliberate
-exception rather than an oversight. Revisit if the UI ever has to run on the
-router's own browser or an older WebView.
+- **Defaults have to be right without explanation**, because most users will
+  never read any of this.
+- **The profile table is a public-facing abstraction.** It will grow. Adding a
+  printer must stay a matter of adding a row.
+
+The transport matrix matters more for the same reason: Android Chrome can drive
+a USB printer directly over WebUSB with nothing installed, iOS cannot do USB at
+all, and the router bridge is the only path that covers every phone and every
+printer. Not everyone will carry a router, so no single transport is sufficient.
+
+## Never let the printer decide for the user
+
+**Offer every layout the hardware can physically do, show what each one costs,
+and let the user choose.** A profile supplies a *default*, never a restriction.
+
+This is a correction of an earlier design in this repo. The demo originally had
+`allowTwoLineSideBySide`, a per-profile flag that *disabled* the dominance
+buttons on narrow media — the printer deciding on the user's behalf. That is
+exactly wrong for a public tool: 9.9 mm split across two lines is a bad idea,
+not an impossible one, and someone printing a two-character label may want it.
+
+It is now `defaultTwoLineLayout`, a starting point, with a user-facing
+SIDE BY SIDE / STACKED control. Dominance greys out only when STACKED is chosen,
+because dominance is genuinely meaningless then — a consequence of the user's
+own choice, never of the printer's. Warnings state the cost ("Side by side puts
+the second line at 1.7 mm — stacked would give 3.5 mm on both") instead of
+removing the option.
+
+Apply the same rule to anything added later: Rollo sheet vs flag layouts, N-up,
+wrap-around vs fold. Offer all viable options per printer.
+
+## JS baseline — ES6+, settled
+
+Global standards default to ES5 for constrained single-file device apps,
+explicitly naming GL.iNet routers. The author has confirmed ES6+ for this repo:
+the UI runs in mobile Safari / Chrome, not on the router itself, and the code is
+already ES6+ throughout. Not an oversight, and not to be "corrected" later.
 
 ## Printer port (active design work)
 
