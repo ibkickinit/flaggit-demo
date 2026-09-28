@@ -421,8 +421,6 @@ input[type=range]::-moz-range-thumb{
   border-radius:1px;
 }
 
-/* Tape strips — removed */
-.flag-tape{ display:none; }
 
 
 /* Flag body — points downward, cable on top */
@@ -443,6 +441,24 @@ input[type=range]::-moz-range-thumb{
   position:relative;
   z-index:1;
   overflow:hidden;
+}
+
+/* The blank leader the tape spends wrapping the cable before any text starts.
+   Drawn so the relationship between cable, wrap and text is visible at a glance. */
+.flag-wrap-zone{
+  position:absolute;top:0;left:0;right:0;
+  pointer-events:none;
+  background:repeating-linear-gradient(45deg,
+    rgba(0,0,0,0.055) 0, rgba(0,0,0,0.055) 3px,
+    transparent 3px, transparent 7px);
+  border-bottom:1px dashed rgba(0,0,0,0.28);
+  display:flex;align-items:flex-end;justify-content:center;
+  overflow:hidden;
+}
+.flag-wrap-zone span{
+  font-family:'Share Tech Mono',monospace;
+  font-size:8px;letter-spacing:.5px;color:rgba(0,0,0,0.45);
+  padding-bottom:2px;white-space:nowrap;
 }
 
 .flag-text-wrap{
@@ -499,40 +515,6 @@ input[type=range]::-moz-range-thumb{
   white-space:nowrap;
 }
 
-/* Queue preview bottom sheet */
-#qp-overlay{
-  display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:200;
-}
-#qp-sheet{
-  display:none;position:fixed;bottom:0;left:0;right:0;z-index:201;
-  background:var(--surf);border-top:1px solid var(--border2);
-  border-radius:12px 12px 0 0;
-  padding:0 0 calc(12px + var(--safe-bottom)) 0;
-  box-shadow:0 -4px 24px rgba(0,0,0,0.4);
-}
-#qp-sheet.open{ display:block; }
-#qp-overlay.open{ display:block; }
-.qp-header{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:12px 16px 10px;border-bottom:1px solid var(--border);
-}
-.qp-label-name{
-  font-family:var(--mono);font-size:15px;color:var(--text);letter-spacing:1px;
-}
-.qp-close{
-  background:none;border:1px solid var(--border2);color:var(--text2);
-  border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
-}
-.qp-body{
-  padding:14px 16px 0;
-  display:flex;align-items:flex-start;justify-content:center;
-}
-.qp-flag-wrap{
-  background:#0a0a0a;border-radius:3px;padding:10px 8px;
-  display:flex;align-items:flex-start;justify-content:center;
-  overflow:hidden;max-width:100%;
-}
 </style>
 </head>
 <body>
@@ -556,7 +538,7 @@ input[type=range]::-moz-range-thumb{
   <div class="tabs">
     <button class="tab active" id="tab-build" onclick="switchTab('build')">Build</button>
     <button class="tab" id="tab-queue" onclick="switchTab('queue')">Print Queue <span class="badge" id="q-badge" style="display:none">0</span></button>
-    <button class="tab" id="tab-settings" style="display:none;" onclick="switchTab('settings')">Settings</button>
+    <button class="tab" id="tab-settings" onclick="switchTab('settings')">Settings</button>
   </div>
 
   <!-- BODY -->
@@ -729,6 +711,10 @@ input[type=range]::-moz-range-thumb{
             <label class="flbl">Line 1 — Fixed Label</label>
             <input type="text" id="tl-line1" value="LED WALL" oninput="this.value=this.value.toUpperCase();updatePreview()" placeholder="LED WALL · CAM · POWER"/>
             <div class="dom-ctrl">
+              <button class="dom-btn active" id="tll-side" onclick="setTwoLineLayout('side-by-side')">SIDE BY SIDE</button>
+              <button class="dom-btn" id="tll-stack" onclick="setTwoLineLayout('stacked')">STACKED</button>
+            </div>
+            <div class="dom-ctrl">
               <button class="dom-btn active" id="dom-l1" onclick="setDominance('l1')">L1 BIG</button>
               <button class="dom-btn" id="dom-eq" onclick="setDominance('equal')">EQUAL</button>
               <button class="dom-btn" id="dom-l2" onclick="setDominance('l2')">L2 BIG</button>
@@ -868,10 +854,13 @@ input[type=range]::-moz-range-thumb{
       <div class="sec" style="padding-top:4px;">
         <div class="flag-preview-wrap">
           <div class="flag-preview-label">Flag Preview</div>
+          <div id="flag-profile-note" onclick="switchTab('settings')" title="Change printer &amp; media" style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.5px;cursor:pointer;text-decoration:underline dotted;"></div>
+          <div id="flag-profile-warn" style="display:none;font-family:var(--sans);font-size:11px;line-height:1.45;color:var(--amber);background:var(--amber-bg);border:1px solid var(--amber-dim);border-radius:3px;padding:6px 8px;"></div>
           <div class="flag-canvas-wrap">
             <div class="flag-scene" id="flag-scene">
               <div class="flag-cable"></div>
               <div class="flag-body" id="flag-body">
+                <div class="flag-wrap-zone" id="flag-wrap-zone"><span></span></div>
                 <div class="flag-text-wrap" id="flag-text-wrap">
                   <div class="flag-line1" id="flag-line1">A</div>
                   <div class="flag-line2" id="flag-line2" style="display:none;"></div>
@@ -897,24 +886,24 @@ input[type=range]::-moz-range-thumb{
             </select>
           </div>
           <div class="field">
-            <label class="flbl">Cable Size</label>
-            <select id="cable-size" onchange="onSliderChange()">
-              <option value="50">Small — XLR, Ethernet, Coax</option>
-              <option value="100" selected>Medium — Edison, True1</option>
-              <option value="200">Large — Soca, Camlock, Snake</option>
-            </select>
+            <div class="slider-row">
+              <label class="flbl">Cable Diameter</label>
+              <span class="slider-val" id="cable-size-val">&mdash;</span>
+            </div>
+            <input type="range" id="cable-size" min="3" max="32" value="8" step="0.5" oninput="onSliderChange()"/>
+            <div id="cable-hint" style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:3px;letter-spacing:.5px;"></div>
           </div>
           <div class="field">
             <div class="slider-row">
               <label class="flbl">Text Size</label>
-              <span class="slider-val" id="font-size-val">36</span>
+              <span class="slider-val" id="font-size-val">—</span>
             </div>
             <input type="range" id="font-size-slider" min="200" max="500" value="430" step="10" oninput="onSliderChange()"/>
           </div>
           <div class="field">
             <div class="slider-row">
               <label class="flbl">Label Padding</label>
-              <span class="slider-val" id="padding-val">0</span>
+              <span class="slider-val" id="padding-val">—</span>
             </div>
             <input type="range" id="padding-slider" min="0" max="60" value="0" step="2" oninput="onSliderChange()"/>
           </div>
@@ -953,15 +942,15 @@ input[type=range]::-moz-range-thumb{
           <div class="srow">
             <div class="srow-info">
               <div class="srow-name">Printer IP Address</div>
-              <div class="srow-desc">Star TSP143IV on your GL.iNet network</div>
+              <div class="srow-desc">Python relay on your GL.iNet router</div>
             </div>
           </div>
           <div class="field">
             <input type="text" id="cfg-ip" value="192.168.8.100" oninput="saveSettings()" placeholder="192.168.8.100" inputmode="decimal"/>
           </div>
           <div class="field">
-            <label class="flbl">Port (usually 80 for WebPRNT)</label>
-            <input type="number" id="cfg-port" value="80" oninput="saveSettings()"/>
+            <label class="flbl">Relay port (9000)</label>
+            <input type="number" id="cfg-port" value="9000" oninput="saveSettings()"/>
           </div>
           <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
             <button class="btn-test" id="btn-test" onclick="testPrinter()">Test Connection</button>
@@ -973,24 +962,21 @@ input[type=range]::-moz-range-thumb{
         <div class="card">
           <div class="srow">
             <div class="srow-info">
-              <div class="srow-name">Paper Width</div>
-              <div class="srow-desc">Linerless roll width in mm</div>
-            </div>
-            <div class="srow-ctrl">
-              <select id="cfg-width" onchange="saveSettings()" style="width:auto;">
-                <option value="40" selected>40 mm</option>
-                <option value="58">58 mm</option>
-                <option value="80">80 mm</option>
-              </select>
+              <div class="srow-name">Printer &amp; Media</div>
+              <div class="srow-desc">Drives every geometry figure in the preview</div>
             </div>
           </div>
+          <div class="field">
+            <select id="cfg-profile" onchange="onProfileChange()"><!-- options from PRINTER_PROFILES --></select>
+          </div>
+        </div>
 
         <div class="sec-lbl" style="margin-top:14px;">About</div>
         <div class="card">
           <div class="srow" style="border-bottom:none;">
             <div class="srow-info">
               <div class="srow-name">Flaggit</div>
-              <div class="srow-desc">Star TSP143IV · StarWebPRNT · 40mm linerless</div>
+              <div class="srow-desc">Multi-printer geometry preview · relay speaks ESC*r raster over TCP 9100</div>
             </div>
           </div>
         </div>
@@ -1015,213 +1001,517 @@ input[type=range]::-moz-range-thumb{
 
 <script>
 // ═══════════════════════════════════════════════════
-//  STATE
+//  PRINTER PROFILES
+//  Everything printer-specific lives here. Geometry elsewhere is in mm and
+//  converted to dots at the raster boundary, so a new printer is a new row.
+//
+//  printableWidthMm is the INK width, not the media width — on Brother the
+//  128-pin head is narrower than 24 mm tape, so ~3 mm per edge cannot print.
+//  Brother figures come from the official Raster Command Reference tape table
+//  (PT-E550W/P750W/P710BT, section 2.3.2).
 // ═══════════════════════════════════════════════════
-let currentMode = 'alpha';
+const PRINTER_PROFILES = {
+  'star-40': {
+    label: 'Star TSP143IV SK — 40 mm linerless',
+    dpi: 203,
+    mediaWidthMm: 40,
+    // UNVERIFIED-1 (see AGENTS.md). Held at 40 by decision until an edge-to-edge
+    // test print is measured. The relay's SAFE_W=270 implies ~33.8 mm, which
+    // would shrink every Star figure below and narrow the Star/Brother gap.
+    printableWidthMm: 40,
+    edgeOffsetMm: 0,
+    minFeedMm: 0,              // continuous roll, no per-label minimum
+    maxLengthMm: null,         // unbounded
+    layout: 'rotated-paddle',  // glyph height across the web, text reads along the cable
+    transport: 'tcp-9100',
+    mediaType: 'linerless-direct-thermal',
+    selfAdhering: true,        // sticks to itself — the wrap-fold flag works natively
+    defaultTwoLineLayout: 'side-by-side',
+  },
+  'brother-24': {
+    label: 'Brother PT-P710BT — 24 mm TZe-FX',
+    dpi: 180,
+    mediaWidthMm: 24,
+    printableWidthMm: 18.1,    // 128 dots
+    edgeOffsetMm: 2.96,        // 21 dots per edge
+    minFeedMm: 24.5,           // tape fed per print regardless of content
+    maxLengthMm: 1000,
+    layout: 'linear-strip',
+    transport: 'usb-or-bt-spp',
+    mediaType: 'laminated-tape',
+    selfAdhering: true,        // TZe-FX only; standard TZe is not rated for this
+    // Side by side fits, but splits to 11.2 / 5.4 mm; stacking gives 9.7 mm on
+    // both for a longer label. Default to stacked, offer both.
+    defaultTwoLineLayout: 'stacked',
+  },
+  'brother-18': {
+    label: 'Brother PT-P710BT — 18 mm TZe-FX',
+    dpi: 180,
+    mediaWidthMm: 18,
+    printableWidthMm: 15.8,    // 112 dots
+    edgeOffsetMm: 1.12,
+    minFeedMm: 24.5,
+    maxLengthMm: 1000,
+    layout: 'linear-strip',
+    transport: 'usb-or-bt-spp',
+    mediaType: 'laminated-tape',
+    selfAdhering: true,
+    defaultTwoLineLayout: 'stacked',
+  },
+  'brother-12': {
+    label: 'Brother PT-P710BT — 12 mm TZe-FX',
+    dpi: 180,
+    mediaWidthMm: 12,
+    printableWidthMm: 9.9,     // 70 dots
+    edgeOffsetMm: 0.98,
+    minFeedMm: 24.5,
+    maxLengthMm: 1000,
+    layout: 'linear-strip',
+    transport: 'usb-or-bt-spp',
+    mediaType: 'laminated-tape',
+    selfAdhering: true,
+    defaultTwoLineLayout: 'stacked',   // side by side splits to 6.1 / 3.0 mm
+  },
+  'rollo-2': {
+    label: 'Rollo X1040 — 2 in die-cut',
+    dpi: 203,
+    mediaWidthMm: 50.8,
+    printableWidthMm: 50.8,
+    edgeOffsetMm: 0,
+    minFeedMm: 0,
+    maxLengthMm: 152,          // 6 in die-cut; gap-sensing, so length is fixed
+    layout: 'rotated-paddle',
+    transport: 'usb-wifi-airprint',   // X1040 confirmed: WiFi + AirPrint/IPP, not the USB-only X1038
+    mediaType: 'direct-thermal-on-liner',
+    selfAdhering: false,       // paper on liner — will not self-adhere for a fold
+    defaultTwoLineLayout: 'side-by-side',
+  },
+  'rollo-4': {
+    label: 'Rollo X1040 — 4 in die-cut',
+    dpi: 203,
+    mediaWidthMm: 104,
+    printableWidthMm: 104,
+    edgeOffsetMm: 0,
+    minFeedMm: 0,
+    maxLengthMm: 152,
+    layout: 'sheet',           // wants N-up imposition, not a single flag
+    transport: 'usb-wifi-airprint',   // X1040 confirmed: WiFi + AirPrint/IPP, not the USB-only X1038
+    mediaType: 'direct-thermal-on-liner',
+    selfAdhering: false,
+    defaultTwoLineLayout: 'side-by-side',
+  },
+};
 
-function clampIfSpinner(event, startId, endId, changed) {
-  if (event && event.inputType) return;  // keyboard input — skip, let onblur handle it
-  clampRange(startId, endId, changed);
+const DEFAULT_PROFILE_ID = 'star-40';
+
+// ═══════════════════════════════════════════════════
+//  GEOMETRY CONSTANTS
+//  Lengths are mm. The dots-per-mm conversion happens once, in mmToDots().
+//  Values reproduce the relay's dot constants exactly at 203 dpi
+//  (relay's 10 dots ÷ 8 dots/mm = 1.25 mm, and so on).
+// ═══════════════════════════════════════════════════
+const GEOM = {
+  basePadMm: 1.25,            // relay BASE_PAD base, before cable_pad
+  endPadMm: 1.25,             // relay END_PAD — free end always this far from paper end
+  baseGapMm: 1.0,             // relay BASE_GAP — text→tag, before label padding
+  lineGapMm: 1.0,             // relay LINE_GAP — between line1 and line2
+  showNameGapMm: 0.75,        // relay SN_GAP
+  singleLineFill: 0.94,       // fraction of printable width one line may occupy
+  bandFill: 0.22,             // MAIN/BACKUP and show-name band height
+  // UNVERIFIED-2 (see AGENTS.md). Barlow Condensed cap height ÷ em, assumed.
+  // Every cap-height figure the UI reports scales off this one number.
+  capHeightRatio: 0.72,
+  centringNudgePx: 8,         // compensates Barlow Condensed's left side bearing
+};
+
+// Share of the printable width each line gets. Duplicated verbatim in the relay's
+// make_label_perp() — change one, change the other or the preview lies.
+const DOMINANCE_RATIOS = {
+  l1:    { line1: 0.62, line2: 0.30 },
+  equal: { line1: 0.46, line2: 0.46 },
+  l2:    { line1: 0.30, line2: 0.62 },
+};
+
+// The Text Size slider's wire units. The relay expects this range and repeats the
+// same mapping, so the range is protocol, not preference.
+const SLIDER = { min: 200, max: 500, heightFloor: 0.10, heightSpan: 0.90 };
+
+// Cable wrap, derived from diameter rather than picked from presets.
+//
+// The old 50 / 100 / 200 dot presets turn out to be exactly half-circumferences
+// of 4 / 8 / 16 mm cable (within 0.5%), which is the physically right quantity:
+// on a fold-over flag each printed face wraps half the way round. So the control
+// is the cable's diameter and the leader follows from it.
+const CABLE = {
+  minDiameterMm: 3,      // Brother rates TZe-FX for cables 3 mm and up
+  maxDiameterMm: 32,     // Soca / camlock / multicore territory
+  defaultDiameterMm: 8,  // matches the old "Medium — Edison, True1" preset
+};
+
+// Familiar cables at their approximate outside diameter, so the slider reads as
+// something physical rather than a bare number. Nearest match is shown as a hint;
+// these are guides, not constraints — the slider is continuous.
+const CABLE_EXAMPLES = [
+  { mm: 4,  label: 'Cat5 / thin coax' },
+  { mm: 6,  label: 'XLR / mic cable' },
+  { mm: 8,  label: 'Edison / True1' },
+  { mm: 11, label: '12-3 SJOOW' },
+  { mm: 14, label: 'Camlock single' },
+  { mm: 20, label: 'Soca / multicore' },
+  { mm: 28, label: 'Feeder / banded set' },
+];
+
+function nearestCableExample(mm) {
+  return CABLE_EXAMPLES.reduce(
+    (best, c) => Math.abs(c.mm - mm) < Math.abs(best.mm - mm) ? c : best, CABLE_EXAMPLES[0]);
 }
 
-function clampRange(startId, endId, changed) {
-  const sEl = document.getElementById(startId);
-  const eEl = document.getElementById(endId);
-  if (!sEl || !eEl) return;
-  if (!sEl.value.trim() || !eEl.value.trim()) return;
-  const isAlpha = isNaN(parseInt(sEl.value));
-  let changed_val = false;
-  if (isAlpha) {
-    const sv = (sEl.value || 'A').toUpperCase();
-    const ev = (eEl.value || 'A').toUpperCase();
-    const s = sv.charCodeAt(0), e = ev.charCodeAt(0);
-    if (changed === 'start' && s > e) { eEl.value = sv; changed_val = true; }
-    if (changed === 'end'   && e < s) { sEl.value = ev; changed_val = true; }
-  } else {
-    const s = parseInt(sEl.value), e = parseInt(eEl.value);
-    if (isNaN(s) || isNaN(e)) return;
-    if (changed === 'start' && s > e) { eEl.value = s; changed_val = true; }
-    if (changed === 'end'   && e < s) { sEl.value = e; changed_val = true; }
-  }
-  if (changed_val) updatePreview();
-}
-let mbEnabled = false;
-let mbStyle = 'perp'; // 'perp' | 'inline'
-let showNameEnabled = false;
-let showNameInvert = false;
-let cutEnabled = true;
-let boldEnabled = true;
-let fontSize = 430;
-let labelPadding = 0;
-let cablePad = 100;
-let queue = [];
-let selected = new Set();
-let qpOpenIdx = -1;
-let printed = [];
-let printedSelected = new Set();
-let qpOpenPrintedIdx = -1;
-let tlDominance = 'l1'; // 'l1' | 'equal' | 'l2'
-let printerStatus = 'unknown';
-let toastTimer = null;
+function cablePadMmForDiameter(diameterMm) { return Math.PI * diameterMm / 2; }
+function diameterMmForCablePad(padMm) { return padMm * 2 / Math.PI; }
+
+const PREVIEW = {
+  maxSceneWidthPx: 200,
+  minSceneWidthPx: 40,
+  referenceWidthMm: 50.8,     // widest flag-capable profile fills the canvas
+};
 
 const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const MAX_PRINT_HISTORY = 50;
+const TOAST_MS = 2900;
+
+const STORAGE_KEYS = {
+  queue: 'flaggit-queue',
+  printed: 'flaggit-printed',
+  theme: 'flaggit-theme',
+  settings: 'gafflabel_settings',   // legacy key — migrating it would orphan saved settings
+};
+
+// Two DOM locations render a flag: the build panel and the queue preview panel.
+const FLAG_TARGETS = {
+  build: { scene: 'flag-scene', body: 'flag-body', wrap: 'flag-text-wrap',
+           wrapZone: 'flag-wrap-zone', line1: 'flag-line1', line2: 'flag-line2',
+           band: 'flag-mb-bottom', showName: 'flag-show-name' },
+  queue: { scene: 'qp-scene', body: 'qp-body', wrap: 'qp-text-wrap',
+           wrapZone: 'qp-wrap-zone', line1: 'qp-line1', line2: 'qp-line2',
+           band: 'qp-mb-bottom', showName: 'qp-show-name' },
+};
+
+// ═══════════════════════════════════════════════════
+//  STATE — single source of truth (no hidden globals)
+// ═══════════════════════════════════════════════════
+const appState = {
+  mode: 'alpha',
+  profileId: DEFAULT_PROFILE_ID,
+  mbEnabled: false,
+  mbStyle: 'perp',                  // 'perp' | 'inline'
+  showNameEnabled: false,
+  showNameInvert: false,
+  boldEnabled: true,
+  cutEnabled: true,
+  fontSlider: 430,                  // SLIDER.min..SLIDER.max, wire units
+  labelPaddingMm: 0,
+  cableDiameterMm: CABLE.defaultDiameterMm,
+  cablePadMm: cablePadMmForDiameter(CABLE.defaultDiameterMm),
+  twoLineLayout: 'side-by-side',   // 'side-by-side' | 'stacked'
+  tlDominance: 'l1',                // 'l1' | 'equal' | 'l2'
+  queue: [],
+  selectedIds: new Set(),
+  printed: [],
+  printedSelectedIds: new Set(),
+  openPreviewId: null,
+  openPrintedPreviewId: null,
+  printerStatus: 'unknown',
+};
+
+// Exposed deliberately: this tool is debugged in the field from a phone's console,
+// where reaching into the script's lexical scope is not possible otherwise.
+window.appState = appState;
+
+let toastTimer = null;
+
+// ═══════════════════════════════════════════════════
+//  UNIT HELPERS
+// ═══════════════════════════════════════════════════
+function el(id) { return document.getElementById(id); }
+function val(id) { const e = el(id); return e ? e.value : ''; }
+function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+
+function activeProfile() {
+  return PRINTER_PROFILES[appState.profileId] || PRINTER_PROFILES[DEFAULT_PROFILE_ID];
+}
+
+function dotsPerMm(profile) { return profile.dpi / 25.4; }
+function mmToDots(mm, profile) { return Math.round(mm * dotsPerMm(profile)); }
+
+// Slider position → fraction of printable width the glyph em may occupy.
+// Mirrors the relay: slider_frac then 0.10 + 0.90 * frac.
+function sliderHeightFraction(sliderValue) {
+  const frac = clamp((sliderValue - SLIDER.min) / (SLIDER.max - SLIDER.min), 0, 1);
+  return SLIDER.heightFloor + SLIDER.heightSpan * frac;
+}
+
+// What the user actually gets, in mm of cap height. The old readout divided the
+// slider by 8.42, which matched nothing — it reported 51 mm where the preview drew
+// about 30 mm of em (≈21 mm of cap).
+function capHeightMm(sliderValue, profile, fillRatio) {
+  return profile.printableWidthMm * fillRatio * sliderHeightFraction(sliderValue) * GEOM.capHeightRatio;
+}
+
+function previewSceneWidthPx(profile) {
+  const proportional = PREVIEW.maxSceneWidthPx * (profile.printableWidthMm / PREVIEW.referenceWidthMm);
+  return Math.round(clamp(proportional, PREVIEW.minSceneWidthPx, PREVIEW.maxSceneWidthPx));
+}
+
+// Two-line side by side splits the printable width, so it dies on narrow media.
+// Whether the two lines sit across the width or run down the flag. This is the
+// USER's choice, not the printer's: every profile offers both, and the readout
+// shows what each costs. A narrow tape makes side-by-side a bad idea, not an
+// impossible one, and the app should say so rather than decide.
+function twoLineLayoutIsSideBySide() { return appState.twoLineLayout === 'side-by-side'; }
+
+// Queue text is user input rendered through innerHTML. It is their own text on
+// their own device, but a label containing markup should still print, not run.
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 // ═══════════════════════════════════════════════════
 //  SETTINGS persistence
 // ═══════════════════════════════════════════════════
 function loadSettings() {
   try {
-    const s = JSON.parse(localStorage.getItem('gafflabel_settings') || '{}');
-    if (s.ip) { document.getElementById('cfg-ip').value = s.ip; document.getElementById('hdr-ip').textContent = s.ip; }
-    if (s.port) document.getElementById('cfg-port').value = s.port;
-    if (s.width) document.getElementById('cfg-width').value = s.width;
-    if (s.cut !== undefined) { cutEnabled = s.cut; document.getElementById('tgl-cut').className = 'tgl' + (cutEnabled ? ' on' : ''); }
-    if (s.bold !== undefined) { boldEnabled = s.bold; document.getElementById('tgl-bold').className = 'tgl' + (boldEnabled ? ' on' : ''); }
-  } catch(e) {}
+    const s = JSON.parse(localStorage.getItem(STORAGE_KEYS.settings) || '{}');
+    if (s.ip && el('cfg-ip')) el('cfg-ip').value = s.ip;
+    if (s.port && el('cfg-port')) el('cfg-port').value = s.port;
+    if (s.profileId && PRINTER_PROFILES[s.profileId]) appState.profileId = s.profileId;
+    if (s.cut !== undefined) appState.cutEnabled = s.cut;
+    if (s.bold !== undefined) appState.boldEnabled = s.bold;
+  } catch (e) { /* first run, or storage blocked */ }
 }
+
 function saveSettings() {
-  const ip = document.getElementById('cfg-ip').value.trim();
-  document.getElementById('hdr-ip').textContent = ip;
   try {
-    localStorage.setItem('gafflabel_settings', JSON.stringify({
-      ip, port: document.getElementById('cfg-port').value,
-      width: document.getElementById('cfg-width').value,
-      cut: cutEnabled, bold: boldEnabled
+    localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify({
+      ip: val('cfg-ip').trim(),
+      port: val('cfg-port'),
+      profileId: appState.profileId,
+      cut: appState.cutEnabled,
+      bold: appState.boldEnabled,
     }));
-  } catch(e) {}
+  } catch (e) { /* storage blocked — settings are a convenience, not required */ }
+}
+
+function onProfileChange() {
+  const next = val('cfg-profile');
+  if (PRINTER_PROFILES[next]) appState.profileId = next;
+  // Adopt the profile's suggested two-line layout, but only as a starting point
+  // the user can override — a profile suggests, it never forbids. tlDominance is
+  // left alone entirely: it records what the user asked for.
+  setTwoLineLayout(activeProfile().defaultTwoLineLayout || 'side-by-side', true);
+  saveSettings();
+  updatePreview();
+  showToast(activeProfile().label);
+}
+
+// Dominance only means something when the two lines share the width. When they
+// are stacked, all three buttons are moot — so they grey out because of the
+// LAYOUT the user picked, never because of the printer they picked.
+function syncDominanceAvailability() {
+  const relevant = twoLineLayoutIsSideBySide();
+  ['dom-l1', 'dom-eq', 'dom-l2'].forEach(id => {
+    const btn = el(id);
+    if (!btn) return;
+    btn.disabled = !relevant;
+    btn.style.opacity = relevant ? '' : '0.35';
+    btn.title = relevant ? '' : 'Stacked lines each use the full width, so there is nothing to split.';
+  });
+}
+
+function setTwoLineLayout(value, fromProfile) {
+  appState.twoLineLayout = value === 'stacked' ? 'stacked' : 'side-by-side';
+  const sbs = twoLineLayoutIsSideBySide();
+  const a = el('tll-side'), b = el('tll-stack');
+  if (a) a.className = 'dom-btn' + (sbs ? ' active' : '');
+  if (b) b.className = 'dom-btn' + (sbs ? '' : ' active');
+  syncDominanceAvailability();
+  if (!fromProfile) updatePreview();
 }
 
 // ═══════════════════════════════════════════════════
-//  TAB SWITCHING
+//  RANGE CLAMPING
+// ═══════════════════════════════════════════════════
+function clampIfSpinner(event, startId, endId, changed) {
+  if (event && event.inputType) return;   // typed input — let onblur handle it
+  clampRange(startId, endId, changed);
+}
+
+function clampRange(startId, endId, changed) {
+  const sEl = el(startId), eEl = el(endId);
+  if (!sEl || !eEl) return;
+  if (!sEl.value.trim() || !eEl.value.trim()) return;
+
+  let didChange = false;
+  if (isNaN(parseInt(sEl.value))) {
+    const sv = (sEl.value || 'A').toUpperCase();
+    const ev = (eEl.value || 'A').toUpperCase();
+    const s = sv.charCodeAt(0), e = ev.charCodeAt(0);
+    if (changed === 'start' && s > e) { eEl.value = sv; didChange = true; }
+    if (changed === 'end'   && e < s) { sEl.value = ev; didChange = true; }
+  } else {
+    const s = parseInt(sEl.value), e = parseInt(eEl.value);
+    if (isNaN(s) || isNaN(e)) return;
+    if (changed === 'start' && s > e) { eEl.value = s; didChange = true; }
+    if (changed === 'end'   && e < s) { sEl.value = e; didChange = true; }
+  }
+  if (didChange) updatePreview();
+}
+
+// ═══════════════════════════════════════════════════
+//  TAB + MODE SWITCHING
 // ═══════════════════════════════════════════════════
 function switchTab(tab) {
-  if (tab === 'settings') tab = 'build'; // demo: no settings
-  ['build','queue','settings'].forEach(t => {
-    document.getElementById('panel-'+t).style.display = t === tab ? '' : 'none';
-    document.getElementById('tab-'+t).className = 'tab' + (t === tab ? ' active' : '');
+  ['build', 'queue', 'settings'].forEach(t => {
+    el('panel-' + t).style.display = t === tab ? '' : 'none';
+    el('tab-' + t).className = 'tab' + (t === tab ? ' active' : '');
   });
-  document.querySelector('.fab-wrap').style.display = '';
-  document.getElementById('add-fab').style.display = tab === 'build' ? '' : 'none';
+  document.querySelector('.fab-wrap').style.display = tab === 'settings' ? 'none' : '';
+  el('add-fab').style.display = tab === 'build' ? '' : 'none';
 }
 
-// ═══════════════════════════════════════════════════
-//  MODE SWITCHING
-// ═══════════════════════════════════════════════════
 function setMode(mode) {
-  currentMode = mode;
-  ['alpha','numeric','alphanum','twoline'].forEach(m => {
-    document.getElementById('mode-'+m).className = 'mode-btn' + (m === mode ? ' active' : '');
-    document.getElementById('form-'+m).style.display = m === mode ? '' : 'none';
+  appState.mode = mode;
+  ['alpha', 'numeric', 'alphanum', 'twoline'].forEach(m => {
+    el('mode-' + m).className = 'mode-btn' + (m === mode ? ' active' : '');
+    el('form-' + m).style.display = m === mode ? '' : 'none';
   });
   updatePreview();
 }
 
 // ═══════════════════════════════════════════════════
-//  RENDER SUB-FIELDS
+//  SUB-FIELD VISIBILITY
 // ═══════════════════════════════════════════════════
 function renderAlphaMethod() {
-  const m = document.getElementById('alpha-method').value;
-  document.getElementById('alpha-range-fields').style.display = m === 'range' ? '' : 'none';
-  document.getElementById('alpha-manual-fields').style.display = m === 'manual' ? '' : 'none';
+  const m = val('alpha-method');
+  el('alpha-range-fields').style.display  = m === 'range'  ? '' : 'none';
+  el('alpha-manual-fields').style.display = m === 'manual' ? '' : 'none';
   updatePreview();
 }
 
 function renderANSeries() {
-  const t = document.getElementById('an-stype').value;
-  document.getElementById('an-num-fields').style.display = t === 'numeric' ? '' : 'none';
-  document.getElementById('an-alpha-fields').style.display = t === 'alpha' ? '' : 'none';
+  const t = val('an-stype');
+  el('an-num-fields').style.display   = t === 'numeric' ? '' : 'none';
+  el('an-alpha-fields').style.display = t === 'alpha'   ? '' : 'none';
 }
 
-function setDominance(val) {
-  tlDominance = val;
-  ['l1','eq','l2'].forEach(k => {
-    const btn = document.getElementById('dom-' + k);
-    if (btn) btn.className = 'dom-btn' + (k === (val === 'equal' ? 'eq' : val) ? ' active' : '');
+function renderTLSeries() {
+  const t = val('tl-stype');
+  el('tl-num-fields').style.display   = t === 'numeric'  ? '' : 'none';
+  el('tl-alpha-fields').style.display = t === 'alpha'    ? '' : 'none';
+  el('tl-an-fields').style.display    = t === 'alphanum' ? '' : 'none';
+}
+
+function setDominance(value) {
+  appState.tlDominance = value;
+  ['l1', 'eq', 'l2'].forEach(key => {
+    const btn = el('dom-' + key);
+    const active = key === (value === 'equal' ? 'eq' : value);
+    if (btn) btn.className = 'dom-btn' + (active ? ' active' : '');
   });
   updatePreview();
 }
 
-function renderTLSeries() {
-  const t = document.getElementById('tl-stype').value;
-  document.getElementById('tl-num-fields').style.display = t === 'numeric' ? '' : 'none';
-  document.getElementById('tl-alpha-fields').style.display = t === 'alpha' ? '' : 'none';
-  document.getElementById('tl-an-fields').style.display = t === 'alphanum' ? '' : 'none';
+function setMBStyle(value) {
+  appState.mbStyle = value;
+  el('mb-style-perp').className   = 'dom-btn' + (value === 'perp'   ? ' active' : '');
+  el('mb-style-inline').className = 'dom-btn' + (value === 'inline' ? ' active' : '');
+  updatePreview();
+}
+
+function toggleMB() {
+  appState.mbEnabled = !appState.mbEnabled;
+  el('tgl-mb').className = 'tgl' + (appState.mbEnabled ? ' on' : '');
+  el('mb-options').style.display = appState.mbEnabled ? '' : 'none';
+  updatePreview();
+}
+
+function toggleShowName() {
+  appState.showNameEnabled = !appState.showNameEnabled;
+  el('tgl-sn').className = 'tgl' + (appState.showNameEnabled ? ' on' : '');
+  el('sn-options').style.display = appState.showNameEnabled ? '' : 'none';
+  updatePreview();
+}
+
+function toggleShowNameInvert() {
+  appState.showNameInvert = !appState.showNameInvert;
+  el('tgl-sn-invert').className = 'tgl' + (appState.showNameInvert ? ' on' : '');
+  updatePreview();
 }
 
 // ═══════════════════════════════════════════════════
 //  SERIES GENERATORS
 // ═══════════════════════════════════════════════════
+function alphaRange(fromId, toId) {
+  const from = (val(fromId) || 'A').toUpperCase();
+  const toRaw = val(toId);
+  const to = (toRaw.trim() ? toRaw : val(fromId) || 'A').toUpperCase();
+  const fi = ALPHA.indexOf(from), ti = ALPHA.indexOf(to);
+  return (fi >= 0 && ti >= 0 && fi <= ti) ? ALPHA.slice(fi, ti + 1).split('') : [];
+}
+
 function genAlpha() {
-  const method = document.getElementById('alpha-method').value;
-  if (method === 'range') {
-    const f = (document.getElementById('alpha-from').value || 'A').toUpperCase();
-    const toRaw = document.getElementById('alpha-to').value;
-    const t = (toRaw.trim() ? toRaw : document.getElementById('alpha-from').value || 'A').toUpperCase();
-    const fi = ALPHA.indexOf(f), ti = ALPHA.indexOf(t);
-    if (fi < 0 || ti < 0 || fi > ti) return [];
-    return ALPHA.slice(fi, ti+1).split('');
-  } else {
-    const raw = document.getElementById('alpha-manual').value;
-    return raw.split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(s => s.length === 1 && ALPHA.includes(s));
-  }
+  if (val('alpha-method') === 'range') return alphaRange('alpha-from', 'alpha-to');
+  return val('alpha-manual').split(/[\s,]+/)
+    .map(s => s.trim().toUpperCase())
+    .filter(s => s.length === 1 && ALPHA.includes(s));
 }
 
 function genNumeric(startId, endId, padId) {
-  const s = parseInt(document.getElementById(startId).value) || 1;
-  const eRaw = document.getElementById(endId).value;
-  const e = eRaw.trim() ? (parseInt(eRaw) || 1) : s;
-  const pad = parseInt(document.getElementById(padId).value) || 0;
-  if (s > e) return [];
+  const start = parseInt(val(startId)) || 1;
+  const endRaw = val(endId);
+  const end = endRaw.trim() ? (parseInt(endRaw) || 1) : start;
+  const pad = parseInt(val(padId)) || 0;
+  if (start > end) return [];
   const out = [];
-  for (let i = s; i <= e; i++) out.push(pad ? String(i).padStart(pad, '0') : String(i));
+  for (let i = start; i <= end; i++) out.push(pad ? String(i).padStart(pad, '0') : String(i));
   return out;
 }
 
 function genAN() {
-  const prefix = document.getElementById('an-prefix').value;
-  const sep = document.getElementById('an-sep').value;
-  const stype = document.getElementById('an-stype').value;
-  let series;
-  if (stype === 'numeric') {
-    series = genNumeric('an-num-start','an-num-end','an-num-pad');
-  } else {
-    const f = (document.getElementById('an-alpha-from').value || 'A').toUpperCase();
-    const anToRaw = document.getElementById('an-alpha-to').value;
-    const t = (anToRaw.trim() ? anToRaw : document.getElementById('an-alpha-from').value || 'A').toUpperCase();
-    const fi = ALPHA.indexOf(f), ti = ALPHA.indexOf(t);
-    series = fi >= 0 && ti >= 0 && fi <= ti ? ALPHA.slice(fi, ti+1).split('') : [];
-  }
-  return series.map(s => prefix + sep + s);
+  const prefix = val('an-prefix');
+  const sep = val('an-sep');
+  const series = val('an-stype') === 'numeric'
+    ? genNumeric('an-num-start', 'an-num-end', 'an-num-pad')
+    : alphaRange('an-alpha-from', 'an-alpha-to');
+  // A trailing-space prefix plus an explicit separator would give "CAM -1";
+  // the separator wins and the stray space goes.
+  const head = (sep ? prefix.replace(/\s+$/, '') : prefix) + sep;
+  return series.map(s => head + s);
 }
 
 function genTL() {
-  const line1 = document.getElementById('tl-line1').value || 'LABEL';
-  const stype = document.getElementById('tl-stype').value;
+  const line1 = val('tl-line1') || 'LABEL';
+  const stype = val('tl-stype');
   let series;
   if (stype === 'numeric') {
-    series = genNumeric('tl-num-start','tl-num-end','tl-num-pad');
+    series = genNumeric('tl-num-start', 'tl-num-end', 'tl-num-pad');
   } else if (stype === 'alpha') {
-    const f = (document.getElementById('tl-alpha-from').value || 'A').toUpperCase();
-    const tlToRaw = document.getElementById('tl-alpha-to').value;
-    const t = (tlToRaw.trim() ? tlToRaw : document.getElementById('tl-alpha-from').value || 'A').toUpperCase();
-    const fi = ALPHA.indexOf(f), ti = ALPHA.indexOf(t);
-    series = fi >= 0 && ti >= 0 && fi <= ti ? ALPHA.slice(fi, ti+1).split('') : [];
+    series = alphaRange('tl-alpha-from', 'tl-alpha-to');
   } else {
-    const prefix = document.getElementById('tl-an-prefix').value;
-    const s = parseInt(document.getElementById('tl-an-start').value) || 1;
-    const tlAnEndRaw = document.getElementById('tl-an-end').value;
-    const e = tlAnEndRaw.trim() ? (parseInt(tlAnEndRaw) || 1) : s;
+    const prefix = val('tl-an-prefix');
+    const start = parseInt(val('tl-an-start')) || 1;
+    const endRaw = val('tl-an-end');
+    const end = endRaw.trim() ? (parseInt(endRaw) || 1) : start;
     series = [];
-    for (let i = s; i <= e; i++) series.push((prefix ? prefix + ' ' : '') + i);
+    for (let i = start; i <= end; i++) series.push((prefix ? prefix + ' ' : '') + i);
   }
-  // Two-line: store as object with line1 / line2
-  return series.map(s2 => ({ line1, line2: s2, twoLine: true }));
+  return series.map(s => ({ line1, line2: s, twoLine: true }));
 }
 
 function getCurrentSeries() {
-  switch(currentMode) {
+  switch (appState.mode) {
     case 'alpha':    return genAlpha().map(l => ({ line1: l, twoLine: false }));
-    case 'numeric':  return genNumeric('num-start','num-end','num-pad').map(l => ({ line1: l, twoLine: false }));
+    case 'numeric':  return genNumeric('num-start', 'num-end', 'num-pad').map(l => ({ line1: l, twoLine: false }));
     case 'alphanum': return genAN().map(l => ({ line1: l, twoLine: false }));
     case 'twoline':  return genTL();
   }
@@ -1229,706 +1519,671 @@ function getCurrentSeries() {
 }
 
 // ═══════════════════════════════════════════════════
+//  FLAG SPEC — what renderFlag needs, from wherever
+//  The build panel derives one from live state; a queue item already is one.
+// ═══════════════════════════════════════════════════
+function buildSpecFromState(item) {
+  const mbText = appState.mbEnabled ? (val('mb-main-text') || 'MAIN') : null;
+  let line1 = item ? item.line1 : '—';
+  let line2 = item && item.twoLine ? item.line2 : null;
+
+  // Inline MB appends to the text instead of getting its own band.
+  if (mbText && appState.mbStyle === 'inline') {
+    if (line2 && String(line2).trim()) line2 = String(line2).toUpperCase() + ' ' + mbText;
+    else line1 = String(line1).toUpperCase() + ' ' + mbText;
+  }
+
+  return {
+    line1: line1,
+    line2: line2,
+    fontSlider: appState.fontSlider,
+    labelPaddingMm: appState.labelPaddingMm,
+    cablePadMm: appState.cablePadMm,
+    dominance: appState.tlDominance,
+    twoLineLayout: appState.twoLineLayout,
+    bandText: (mbText && appState.mbStyle === 'perp') ? mbText : null,
+    showName: appState.showNameEnabled ? (val('sn-text').trim().toUpperCase() || null) : null,
+    showNameInvert: appState.showNameEnabled && appState.showNameInvert,
+    profileId: appState.profileId,
+  };
+}
+
+function specFromQueueItem(item) {
+  return {
+    line1: item.line1,
+    line2: item.twoLine ? item.line2 : null,
+    fontSlider: item.fontSlider,
+    labelPaddingMm: item.labelPaddingMm,
+    cablePadMm: item.cablePadMm,
+    dominance: item.dominance || 'l1',
+    twoLineLayout: item.twoLineLayout || 'side-by-side',
+    bandText: item.bandText || null,
+    showName: item.showName || null,
+    showNameInvert: !!item.showNameInvert,
+    profileId: item.profileId || DEFAULT_PROFILE_ID,
+  };
+}
+
+// ═══════════════════════════════════════════════════
+//  FLAG RENDER — one implementation, two call sites
+//  Mirrors the relay's make_label_perp layout:
+//    fold → basePad + cablePad + labelPadding → text → gap → [band] → [show name]
+// ═══════════════════════════════════════════════════
+function renderFlag(targets, spec) {
+  const line1El = el(targets.line1);
+  if (!line1El) return;
+
+  const line2El  = el(targets.line2);
+  const wrap     = el(targets.wrap);
+  const bandEl   = el(targets.band);
+  const showEl   = el(targets.showName);
+  const scene    = el(targets.scene);
+  const body     = el(targets.body);
+
+  const profile = PRINTER_PROFILES[spec.profileId] || PRINTER_PROFILES[DEFAULT_PROFILE_ID];
+  const hasTwo = !!(spec.line2 && String(spec.line2).trim());
+
+  const sceneWidthPx = previewSceneWidthPx(profile);
+  const pxPerMm = sceneWidthPx / profile.printableWidthMm;
+  if (scene) scene.style.width = sceneWidthPx + 'px';
+  if (body) body.style.height = '';   // height follows content
+
+  // Glyph em heights, as a share of printable width.
+  //
+  // Two ways to lay out two lines, and the user picks:
+  //   side-by-side — split the width by the dominance ratios; reads compactly
+  //   stacked      — run them down the flag, each at full height; longer label
+  // Narrow media makes side-by-side a poor choice (9.9 mm splits to 6.1 / 3.0)
+  // but not an unavailable one. The profile supplies the default, nothing more.
+  const sideBySide = hasTwo && spec.twoLineLayout !== 'stacked';
+  const stackAlongFeed = hasTwo && !sideBySide;
+  const ratios = DOMINANCE_RATIOS[spec.dominance] || DOMINANCE_RATIOS.l1;
+  const fill1 = sideBySide ? ratios.line1 : GEOM.singleLineFill;
+  const fill2 = sideBySide ? ratios.line2 : GEOM.singleLineFill;
+  const heightFrac = sliderHeightFraction(spec.fontSlider);
+  const font1Px = Math.max(6, Math.round(sceneWidthPx * fill1 * heightFrac));
+  const font2Px = Math.max(5, Math.round(sceneWidthPx * fill2 * heightFrac));
+
+  // Lengths along the tape. Label padding applies to both the fold side and the
+  // text→tag side, which is what the relay does.
+  const padTopPx   = Math.round((GEOM.basePadMm + spec.cablePadMm + spec.labelPaddingMm) * pxPerMm);
+  const gapToTagPx = Math.round((GEOM.baseGapMm + spec.labelPaddingMm) * pxPerMm);
+
+  // row-reverse lays the lines across the tape width (line1 outermost);
+  // column runs them one after another down the flag, along the feed.
+  wrap.style.cssText = 'display:flex;' +
+    'flex-direction:' + (stackAlongFeed ? 'column' : 'row-reverse') + ';' +
+    'align-items:' + (stackAlongFeed ? 'center' : 'flex-start') + ';' +
+    'justify-content:center;gap:' + (stackAlongFeed ? Math.round(GEOM.lineGapMm * pxPerMm) : 4) + 'px;' +
+    'width:100%;padding-top:' + padTopPx + 'px;padding-bottom:' + gapToTagPx + 'px;';
+
+  const rotated = 'writing-mode:vertical-lr;text-orientation:mixed;' +
+    'font-family:"Barlow Condensed",sans-serif;line-height:1;text-align:center;';
+
+  line1El.style.cssText = rotated + 'font-size:' + font1Px + 'px;font-weight:900;color:#111;' +
+    'transform:translateX(' + GEOM.centringNudgePx + 'px);';
+  line1El.textContent = String(spec.line1 || '—').toUpperCase();
+
+  if (hasTwo) {
+    line2El.style.cssText = rotated + 'font-size:' + font2Px + 'px;font-weight:700;color:#333;' +
+      'align-self:center;' +
+      (stackAlongFeed ? 'transform:translateX(' + GEOM.centringNudgePx + 'px);' : '');
+    line2El.textContent = String(spec.line2).toUpperCase();
+    line2El.style.display = '';
+  } else {
+    line2El.style.display = 'none';
+    line2El.textContent = '';
+  }
+
+  // Show the leader the tape spends on the cable, so the blank space above the
+  // text reads as deliberate rather than as a layout accident.
+  const zoneEl = el(targets.wrapZone);
+  if (zoneEl) {
+    const wrapPx = Math.round(spec.cablePadMm * pxPerMm);
+    zoneEl.style.height = wrapPx + 'px';
+    zoneEl.style.display = wrapPx > 4 ? '' : 'none';
+    const labelEl = zoneEl.querySelector('span');
+    if (labelEl) labelEl.textContent = wrapPx > 16 ? 'WRAP ' + spec.cablePadMm.toFixed(1) + 'mm' : '';
+  }
+
+  renderBand(bandEl, spec.bandText, sceneWidthPx);
+  renderShowName(showEl, spec.showName, spec.showNameInvert, sceneWidthPx);
+}
+
+// MAIN/BACKUP band — reads across the tape, at the flag tip.
+function renderBand(bandEl, text, sceneWidthPx) {
+  if (!bandEl) return;
+  if (!text) { bandEl.style.display = 'none'; return; }
+  bandEl.style.display = '';
+  bandEl.style.fontSize = Math.round(sceneWidthPx * GEOM.bandFill) + 'px';
+  bandEl.textContent = text.toUpperCase();
+}
+
+// Show name — outermost band. Shrinks to stay on one line.
+function renderShowName(showEl, text, invert, sceneWidthPx) {
+  if (!showEl) return;
+  if (!text) { showEl.style.display = 'none'; return; }
+
+  showEl.style.display = '';
+  showEl.style.whiteSpace = 'nowrap';
+  showEl.textContent = text;
+
+  let size = Math.round(sceneWidthPx * GEOM.bandFill);
+  showEl.style.fontSize = size + 'px';
+  while (showEl.scrollWidth > showEl.offsetWidth && size > 6) {
+    size--;
+    showEl.style.fontSize = size + 'px';
+  }
+
+  const inverted = {
+    background: '#111', color: '#fff', borderTop: 'none', borderRadius: '2px',
+    width: 'calc(100% - 16px)', margin: '4px 8px 4px', padding: '4px 8px 3px',
+  };
+  Object.keys(inverted).forEach(prop => {
+    showEl.style[prop] = invert ? inverted[prop] : '';
+  });
+}
+
+// ═══════════════════════════════════════════════════
 //  PREVIEW
 // ═══════════════════════════════════════════════════
+const PREVIEW_TARGETS = {
+  alpha:    { value: 'preview-alpha-val', count: 'preview-alpha-count' },
+  numeric:  { value: 'preview-num-val',   count: 'preview-num-count' },
+  alphanum: { value: 'preview-an-val',    count: 'preview-an-count' },
+  twoline:  { value: 'preview-tl-val',    count: 'preview-tl-count' },
+};
+
 function updatePreview() {
   const series = getCurrentSeries();
   const count = series.length;
-  const previewStr = series.length === 0 ? '—' :
-    series.slice(0, 3).map(s => s.twoLine ? s.line1+' / '+s.line2 : s.line1).join(', ') +
-    (series.length > 3 ? ' … (' + count + ')' : '');
-  const previewDisp = previewStr.replace(/ /g, '\u00A0');
+  const summary = count === 0 ? '—' :
+    series.slice(0, 3).map(s => s.twoLine ? s.line1 + ' / ' + s.line2 : s.line1).join(', ') +
+    (count > 3 ? ' … (' + count + ')' : '');
 
-  switch(currentMode) {
-    case 'alpha':
-      document.getElementById('preview-alpha-val').textContent = previewDisp;
-      document.getElementById('preview-alpha-count').textContent = count;
-      break;
-    case 'numeric':
-      document.getElementById('preview-num-val').textContent = previewDisp;
-      document.getElementById('preview-num-count').textContent = count;
-      break;
-    case 'alphanum':
-      document.getElementById('preview-an-val').textContent = previewDisp;
-      document.getElementById('preview-an-count').textContent = count;
-      break;
-    case 'twoline':
-      document.getElementById('preview-tl-val').textContent = previewDisp;
-      document.getElementById('preview-tl-count').textContent = count;
-      break;
+  const target = PREVIEW_TARGETS[appState.mode];
+  if (target) {
+    el(target.value).textContent = summary.replace(/ /g, ' ');
+    el(target.count).textContent = count;
   }
 
-  // Draw flag preview — show first label in series
-  const first = series[0] || null;
-  if (first) {
-    drawFlag(first.line1, first.line2 || null);
-  } else {
-    drawFlag('—', null);
-  }
+  renderFlag(FLAG_TARGETS.build, buildSpecFromState(series[0] || null));
+  updateGeometryReadout(series[0] || null);
 }
 
-// ═══════════════════════════════════════════════════
-//  MAIN / BACKUP
-// ═══════════════════════════════════════════════════
-function setMBStyle(val) {
-  mbStyle = val;
-  document.getElementById('mb-style-perp').className  = 'dom-btn' + (val === 'perp'   ? ' active' : '');
-  document.getElementById('mb-style-inline').className = 'dom-btn' + (val === 'inline' ? ' active' : '');
-  updatePreview();
-}
-function toggleMB() {
-  mbEnabled = !mbEnabled;
-  document.getElementById('tgl-mb').className = 'tgl' + (mbEnabled ? ' on' : '');
-  document.getElementById('mb-options').style.display = mbEnabled ? '' : 'none';
-  updatePreview();
-}
+// Reports what the label will physically measure, per the active profile.
+function updateGeometryReadout(firstItem) {
+  const profile = activeProfile();
+  const hasTwo = !!(firstItem && firstItem.twoLine);
+  const sideBySide = hasTwo && twoLineLayoutIsSideBySide();
+  const fill = sideBySide ? (DOMINANCE_RATIOS[appState.tlDominance] || DOMINANCE_RATIOS.l1).line1
+                          : GEOM.singleLineFill;
 
-// ═══════════════════════════════════════════════════
-//  TOGGLES
-// ═══════════════════════════════════════════════════
-function onSliderChange() {
-  fontSize = parseInt(document.getElementById('font-size-slider').value) || 430;
-  labelPadding = parseInt(document.getElementById('padding-slider').value) || 0;
-  cablePad = parseInt(document.getElementById('cable-size').value) || 200;
-  document.getElementById('font-size-val').textContent = Math.round(fontSize / 8.42) + 'mm';
-  document.getElementById('padding-val').textContent = labelPadding;
-  const series = getCurrentSeries();
-  const first = series[0] || null;
-  drawFlag(first ? first.line1 : '—', first ? (first.line2 || null) : null);
-}
-
-function toggleShowNameInvert() {
-  showNameInvert = !showNameInvert;
-  document.getElementById('tgl-sn-invert').className = 'tgl' + (showNameInvert ? ' on' : '');
-  updatePreview();
-}
-
-function toggleShowName() {
-  showNameEnabled = !showNameEnabled;
-  document.getElementById('tgl-sn').className = 'tgl' + (showNameEnabled ? ' on' : '');
-  document.getElementById('sn-options').style.display = showNameEnabled ? '' : 'none';
-  updatePreview();
-}
-
-function toggleCut() { cutEnabled = !cutEnabled; document.getElementById('tgl-cut').className = 'tgl'+(cutEnabled?' on':''); saveSettings(); }
-function toggleBold() { boldEnabled = !boldEnabled; document.getElementById('tgl-bold').className = 'tgl'+(boldEnabled?' on':''); saveSettings(); }
-
-// ═══════════════════════════════════════════════════
-//  ADD TO QUEUE
-// ═══════════════════════════════════════════════════
-function addToQueue() {
-  const series = getCurrentSeries();
-  if (series.length === 0) { showToast('Nothing to add — check your settings', 'err'); return; }
-
-  const copies = parseInt(document.getElementById('copies').value) || 1;
-  const mainText = (document.getElementById('mb-main-text') ? document.getElementById('mb-main-text').value : 'MAIN') || 'MAIN';
-  const backText = (document.getElementById('mb-back-text') ? document.getElementById('mb-back-text').value : 'BACKUP') || 'BACKUP';
-  // mbStyle is the global state variable
-
-  let added = 0;
-
-  series.forEach(item => {
-    if (mbEnabled) {
-      // Generate MAIN copy/copies then BACKUP copy/copies — paired
-      for (let c = 0; c < copies; c++) {
-        queue.push(buildQueueItem(item, mainText, 'main'));
-        added++;
-      }
-      for (let c = 0; c < copies; c++) {
-        queue.push(buildQueueItem(item, backText, 'back'));
-        added++;
-      }
+  // Show both line heights when the width is split — the second line is the one
+  // that becomes unreadable, and a single number hides that.
+  const sizeEl = el('font-size-val');
+  if (sizeEl) {
+    const cap1 = capHeightMm(appState.fontSlider, profile, fill);
+    if (sideBySide) {
+      const ratios = DOMINANCE_RATIOS[appState.tlDominance] || DOMINANCE_RATIOS.l1;
+      const cap2 = capHeightMm(appState.fontSlider, profile, ratios.line2);
+      sizeEl.textContent = cap1.toFixed(1) + ' / ' + cap2.toFixed(1) + 'mm';
     } else {
-      for (let c = 0; c < copies; c++) {
-        queue.push(buildQueueItem(item, null, null));
-        added++;
+      sizeEl.textContent = cap1.toFixed(1) + 'mm' + (hasTwo ? ' ×2' : '');
+    }
+  }
+
+  const padEl = el('padding-val');
+  if (padEl) padEl.textContent = appState.labelPaddingMm.toFixed(1) + 'mm';
+
+  const cableEl = el('cable-size-val');
+  if (cableEl) cableEl.textContent = appState.cableDiameterMm.toFixed(1) + 'mm \u00f8';
+
+  const hintEl = el('cable-hint');
+  if (hintEl) {
+    hintEl.textContent = '\u2248 ' + nearestCableExample(appState.cableDiameterMm).label +
+      '  \u00b7  wrap leader ' + appState.cablePadMm.toFixed(1) + 'mm (half circumference)';
+  }
+
+  const noteEl = el('flag-profile-note');
+  if (noteEl) {
+    noteEl.textContent = profile.label + ' · ' + profile.printableWidthMm.toFixed(1) +
+      ' mm printable · ' + profile.dpi + ' dpi';
+  }
+
+  const warnEl = el('flag-profile-warn');
+  if (warnEl) {
+    const warnings = [];
+    // Advice, not prohibition: say what the choice costs and let the user decide.
+    if (hasTwo) {
+      const ratios = DOMINANCE_RATIOS[appState.tlDominance] || DOMINANCE_RATIOS.l1;
+      const split2 = capHeightMm(appState.fontSlider, profile, ratios.line2);
+      const full = capHeightMm(appState.fontSlider, profile, GEOM.singleLineFill);
+      if (sideBySide && split2 < 5) {
+        warnings.push('Side by side puts the second line at ' + split2.toFixed(1) +
+          ' mm — hard to read at arm\u2019s length. Stacked would give ' +
+          full.toFixed(1) + ' mm on both, on a longer label.');
+      } else if (!sideBySide) {
+        warnings.push('Stacked: both lines at ' + full.toFixed(1) +
+          ' mm, and the label runs about twice as long as side by side.');
       }
     }
-  });
+    if (!profile.selfAdhering) {
+      warnings.push('This media is on a liner and will not stick to itself — no wrap-fold flag.');
+    }
+    if (profile.minFeedMm > 0) {
+      warnings.push(profile.minFeedMm + ' mm of media is fed per label regardless of length; chain printing avoids the waste.');
+    }
+    if (profile.layout === 'sheet') {
+      warnings.push('This width wants N-up imposition rather than one flag per label.');
+    }
+    warnEl.innerHTML = warnings.map(w => '<div>⚠ ' + w + '</div>').join('');
+    warnEl.style.display = warnings.length ? '' : 'none';
+  }
+}
 
-  renderQueue();
+function onSliderChange() {
+  const profile = activeProfile();
+  appState.fontSlider = parseInt(val('font-size-slider')) || 430;
+  // The padding slider is still in relay dots; convert once, here.
+  appState.labelPaddingMm = (parseInt(val('padding-slider')) || 0) / dotsPerMm(profile);
+  appState.cableDiameterMm = parseFloat(val('cable-size')) || CABLE.defaultDiameterMm;
+  appState.cablePadMm = cablePadMmForDiameter(appState.cableDiameterMm);
+  updatePreview();
+}
 
-  showToast('Added ' + series.length + ' label' + (series.length > 1 ? 's' : '') + ' → queue');
+// ═══════════════════════════════════════════════════
+//  QUEUE — items carry their own geometry so later setting changes cannot
+//  retroactively alter what was already queued.
+// ═══════════════════════════════════════════════════
+let nextItemSeq = 0;
+function newItemId() {
+  nextItemSeq++;
+  return 'lbl-' + Date.now().toString(36) + '-' + nextItemSeq;
 }
 
 function snapshotForm() {
-  const g = id => { const e = document.getElementById(id); return e ? e.value : ''; };
   return {
-    mode: currentMode,
-    copies: parseInt(g('copies')) || 1,
-    // Alpha
-    alphaMethod: g('alpha-method'),
-    alphaFrom: g('alpha-from'),
-    alphaTo: g('alpha-to'),
-    alphaManual: g('alpha-manual'),
-    // Numeric
-    numStart: g('num-start'),
-    numEnd: g('num-end'),
-    numPad: g('num-pad'),
-    // Alphanumeric
-    anPrefix: g('an-prefix'),
-    anSep: g('an-sep'),
-    anStype: g('an-stype'),
-    anNumStart: g('an-num-start'),
-    anNumEnd: g('an-num-end'),
-    anNumPad: g('an-num-pad'),
-    anAlphaFrom: g('an-alpha-from'),
-    anAlphaTo: g('an-alpha-to'),
-    // Two-line
-    tlLine1: g('tl-line1'),
-    tlStype: g('tl-stype'),
-    tlNumStart: g('tl-num-start'),
-    tlNumEnd: g('tl-num-end'),
-    tlNumPad: g('tl-num-pad'),
-    tlAlphaFrom: g('tl-alpha-from'),
-    tlAlphaTo: g('tl-alpha-to'),
-    tlAnPrefix: g('tl-an-prefix'),
-    tlAnStart: g('tl-an-start'),
-    tlAnEnd: g('tl-an-end'),
-    tlDominance: tlDominance,
-    mbStyle: mbStyle,
+    mode: appState.mode,
+    copies: parseInt(val('copies')) || 1,
+    alphaMethod: val('alpha-method'), alphaFrom: val('alpha-from'),
+    alphaTo: val('alpha-to'), alphaManual: val('alpha-manual'),
+    numStart: val('num-start'), numEnd: val('num-end'), numPad: val('num-pad'),
+    anPrefix: val('an-prefix'), anSep: val('an-sep'), anStype: val('an-stype'),
+    anNumStart: val('an-num-start'), anNumEnd: val('an-num-end'), anNumPad: val('an-num-pad'),
+    anAlphaFrom: val('an-alpha-from'), anAlphaTo: val('an-alpha-to'),
+    tlLine1: val('tl-line1'), tlStype: val('tl-stype'),
+    tlNumStart: val('tl-num-start'), tlNumEnd: val('tl-num-end'), tlNumPad: val('tl-num-pad'),
+    tlAlphaFrom: val('tl-alpha-from'), tlAlphaTo: val('tl-alpha-to'),
+    tlAnPrefix: val('tl-an-prefix'), tlAnStart: val('tl-an-start'), tlAnEnd: val('tl-an-end'),
+    tlDominance: appState.tlDominance,
+    twoLineLayout: appState.twoLineLayout,
+    mbStyle: appState.mbStyle,
+    profileId: appState.profileId,
   };
 }
 
 function buildQueueItem(item, mbText, mbType) {
-  let displayLine1 = item.line1;
-  let displayLine2 = item.twoLine ? item.line2 : null;
-  let perpText = null;
+  let line1 = item.line1;
+  let line2 = item.twoLine ? item.line2 : null;
+  let bandText = null;
 
   if (mbText) {
-    if (mbStyle === 'inline') {
-      // Append to line2 if two-line, otherwise to line1
-      if (displayLine2 !== null) {
-        displayLine2 = displayLine2 + ' ' + mbText;
-      } else {
-        displayLine1 = displayLine1 + ' ' + mbText;
-      }
+    if (appState.mbStyle === 'inline') {
+      if (line2 !== null) line2 = line2 + ' ' + mbText;
+      else line1 = line1 + ' ' + mbText;
     } else {
-      perpText = mbText; // perp band at flag tip
+      bandText = mbText;   // its own band at the flag tip
     }
   }
 
   return {
-    id: Date.now() + Math.random(),
-    line1: displayLine1,
-    line2: displayLine2,
-    twoLine: !!(displayLine2),
+    id: newItemId(),
+    line1: line1,
+    line2: line2,
+    twoLine: !!line2,
     mbType: mbType,
-    mbText: perpText,
-    mbStyle: mbStyle,
-    perpMode: true,
-    cablePad: cablePad,
-    fontSize: fontSize,
-    labelPadding: labelPadding,
-    bold: boldEnabled,
-    tlDominance: tlDominance,
-    showName: showNameEnabled ? (document.getElementById('sn-text').value.trim().toUpperCase() || null) : null,
-    showNameInvert: showNameEnabled && showNameInvert,
+    bandText: bandText,
+    mbStyle: appState.mbStyle,
+    profileId: appState.profileId,
+    cablePadMm: appState.cablePadMm,
+    cableDiameterMm: appState.cableDiameterMm,
+    twoLineLayout: appState.twoLineLayout,
+    labelPaddingMm: appState.labelPaddingMm,
+    fontSlider: appState.fontSlider,
+    bold: appState.boldEnabled,
+    dominance: appState.tlDominance,
+    showName: appState.showNameEnabled ? (val('sn-text').trim().toUpperCase() || null) : null,
+    showNameInvert: appState.showNameEnabled && appState.showNameInvert,
     formSnapshot: snapshotForm(),
   };
+}
+
+function addToQueue() {
+  const series = getCurrentSeries();
+  if (series.length === 0) { showToast('Nothing to add — check your settings', 'err'); return; }
+
+  const copies = parseInt(val('copies')) || 1;
+  const mainText = val('mb-main-text') || 'MAIN';
+  const backText = val('mb-back-text') || 'BACKUP';
+
+  series.forEach(item => {
+    if (appState.mbEnabled) {
+      // MAIN copies then BACKUP copies, paired per label.
+      for (let c = 0; c < copies; c++) appState.queue.push(buildQueueItem(item, mainText, 'main'));
+      for (let c = 0; c < copies; c++) appState.queue.push(buildQueueItem(item, backText, 'back'));
+    } else {
+      for (let c = 0; c < copies; c++) appState.queue.push(buildQueueItem(item, null, null));
+    }
+  });
+
+  renderQueue();
+  showToast('Added ' + series.length + ' label' + (series.length > 1 ? 's' : '') + ' → queue');
 }
 
 // ═══════════════════════════════════════════════════
 //  QUEUE RENDERING
 // ═══════════════════════════════════════════════════
+function previewPanelHtml() {
+  const t = FLAG_TARGETS.queue;
+  return '<div class="qi-preview-panel">' +
+    '<div class="flag-scene" id="' + t.scene + '">' +
+      '<div class="flag-cable"></div>' +
+      '<div class="flag-body" id="' + t.body + '">' +
+        '<div class="flag-wrap-zone" id="' + t.wrapZone + '"><span></span></div>' +
+        '<div class="flag-text-wrap" id="' + t.wrap + '">' +
+          '<div class="flag-line1" id="' + t.line1 + '">—</div>' +
+          '<div class="flag-line2" id="' + t.line2 + '" style="display:none;"></div>' +
+        '</div>' +
+        '<div class="flag-mb-bottom" id="' + t.band + '" style="display:none;"></div>' +
+        '<div class="flag-show-name" id="' + t.showName + '" style="display:none;"></div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+const EYE_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+
 function renderQueue() {
-  const el = document.getElementById('queue-list');
-  const badge = document.getElementById('q-badge');
-  const count = document.getElementById('q-count-text');
-  const fab = document.getElementById('fab-print');
-  const fabCount = document.getElementById('fab-count');
+  const listEl = el('queue-list');
+  const queue = appState.queue;
 
-  badge.textContent = queue.length;
-  badge.style.display = queue.length > 0 ? '' : 'none';
-  count.textContent = queue.length + ' label' + (queue.length !== 1 ? 's' : '');
-  fab.disabled = queue.length === 0;
-  fabCount.textContent = queue.length;
-  const printSelBtn = document.getElementById('btn-print-sel');
-  if (printSelBtn) printSelBtn.style.display = selected.size > 0 ? '' : 'none';
+  el('q-badge').textContent = queue.length;
+  el('q-badge').style.display = queue.length > 0 ? '' : 'none';
+  el('q-count-text').textContent = queue.length + ' label' + (queue.length !== 1 ? 's' : '');
+  el('fab-print').disabled = queue.length === 0;
+  el('fab-count').textContent = queue.length;
 
-  if (queue.length === 0) {
-    el.innerHTML = '<div class="empty-q"><span class="empty-q-icon">🏷️</span>No labels yet.<br/>Build a series on the Build tab.</div>';
+  const printSelBtn = el('btn-print-sel');
+  if (printSelBtn) printSelBtn.style.display = appState.selectedIds.size > 0 ? '' : 'none';
+
+  if (queue.length === 0 && appState.printed.length === 0) {
+    listEl.innerHTML = '<div class="empty-q"><span class="empty-q-icon">🏷️</span>' +
+      'No labels yet.<br/>Build a series on the Build tab.</div>';
+    saveState();
     return;
   }
 
   const rows = [];
-  queue.forEach((item, idx) => {
-    const sel = selected.has(idx);
-    const open = qpOpenIdx === idx;
+  queue.forEach(item => {
+    const selected = appState.selectedIds.has(item.id);
     const mbClass = item.mbType === 'main' ? ' main-item' : item.mbType === 'back' ? ' back-item' : '';
-    const tag = item.mbType ? `<span class="qi-tag ${item.mbType}">${item.mbType === 'main' ? 'MAIN' : 'BACKUP'}</span>` : '';
+    const tag = item.mbType
+      ? '<span class="qi-tag ' + item.mbType + '">' + (item.mbType === 'main' ? 'MAIN' : 'BACKUP') + '</span>'
+      : '';
     const text = item.twoLine
-      ? `<span style="display:block;font-size:13px;">${item.line1}</span><span style="display:block;font-size:12px;color:var(--text2);">${item.line2}</span>`
-      : `<span>${item.line1}</span>`;
-    rows.push(`<div class="queue-item${mbClass}" onclick="toggleSel(${idx})" style="${sel ? 'border-color:var(--amber);background:var(--amber-bg);' : ''}">
-      <div class="qi-text">${text}</div>
-      ${tag}
-      <button class="qi-prev${open ? ' active' : ''}" onclick="event.stopPropagation();toggleQueuePreview(${idx})" title="Preview"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-      <button class="qi-load" onclick="event.stopPropagation();loadPreset(${idx})" title="Load preset">↩</button>
-      <button class="qi-del" onclick="event.stopPropagation();removeItem(${idx})">✕</button>
-    </div>`);
-    if (open) {
-      rows.push(`<div class="qi-preview-panel">
-        <div class="flag-scene" id="qp-scene">
-          <div class="flag-cable"></div>
-          <div class="flag-body" id="qp-body">
-            <div class="flag-text-wrap" id="qp-text-wrap">
-              <div class="flag-line1" id="qp-line1">—</div>
-              <div class="flag-line2" id="qp-line2" style="display:none;"></div>
-            </div>
-            <div class="flag-mb-bottom" id="qp-mb-bottom" style="display:none;"></div>
-            <div class="flag-show-name" id="qp-show-name" style="display:none;"></div>
-          </div>
-        </div>
-      </div>`);
-    }
+      ? '<span style="display:block;font-size:13px;">' + escapeHtml(item.line1) + '</span>' +
+        '<span style="display:block;font-size:12px;color:var(--text2);">' + escapeHtml(item.line2) + '</span>'
+      : '<span>' + escapeHtml(item.line1) + '</span>';
+    const open = appState.openPreviewId === item.id;
+
+    rows.push('<div class="queue-item' + mbClass + '" onclick="toggleSel(\'' + item.id + '\')" style="' +
+      (selected ? 'border-color:var(--amber);background:var(--amber-bg);' : '') + '">' +
+      '<div class="qi-text">' + text + '</div>' + tag +
+      '<button class="qi-prev' + (open ? ' active' : '') + '" onclick="event.stopPropagation();toggleQueuePreview(\'' + item.id + '\')" title="Preview">' + EYE_SVG + '</button>' +
+      '<button class="qi-load" onclick="event.stopPropagation();loadPreset(\'' + item.id + '\')" title="Load preset">↩</button>' +
+      '<button class="qi-del" onclick="event.stopPropagation();removeItem(\'' + item.id + '\')">✕</button>' +
+      '</div>');
+    if (open) rows.push(previewPanelHtml());
   });
-  if (printed.length > 0) {
-    rows.push(`<div class="printed-divider">Print History</div>`);
-    if (printedSelected.size > 0) {
-      rows.push(`<button class="btn-sm btn-print-sel" onclick="reAddSelected()" style="margin-bottom:6px;width:100%;">↩ Re-Add Selected (${printedSelected.size})</button>`);
+
+  if (appState.printed.length > 0) {
+    rows.push('<div class="printed-divider">Print History</div>');
+    if (appState.printedSelectedIds.size > 0) {
+      rows.push('<button class="btn-sm btn-print-sel" onclick="reAddSelected()" style="margin-bottom:6px;width:100%;">' +
+        '↩ Re-Add Selected (' + appState.printedSelectedIds.size + ')</button>');
     }
-    printed.forEach((item, idx) => {
-      const sel = printedSelected.has(idx);
-      const open = qpOpenPrintedIdx === idx;
+    appState.printed.forEach(item => {
+      const selected = appState.printedSelectedIds.has(item.id);
+      const open = appState.openPrintedPreviewId === item.id;
       const label = item.twoLine ? (item.line1 + ' / ' + item.line2) : item.line1;
-      const eyeSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
-      rows.push(`<div class="printed-item${sel ? ' printed-sel' : ''}" onclick="togglePrintedSel(${idx})">
-        <span class="printed-check">✓</span>
-        <span class="printed-text">${label}</span>
-        <button class="qi-prev${open ? ' active' : ''}" onclick="event.stopPropagation();togglePrintedPreview(${idx})" title="Preview">${eyeSvg}</button>
-        <span class="printed-time">${item.printedAt || ''}</span>
-      </div>`);
-      if (open) {
-        rows.push(`<div class="qi-preview-panel">
-          <div class="flag-scene" id="qp-scene">
-            <div class="flag-cable"></div>
-            <div class="flag-body" id="qp-body">
-              <div class="flag-text-wrap" id="qp-text-wrap">
-                <div class="flag-line1" id="qp-line1">—</div>
-                <div class="flag-line2" id="qp-line2" style="display:none;"></div>
-              </div>
-              <div class="flag-mb-bottom" id="qp-mb-bottom" style="display:none;"></div>
-              <div class="flag-show-name" id="qp-show-name" style="display:none;"></div>
-            </div>
-          </div>
-        </div>`);
-      }
+      rows.push('<div class="printed-item' + (selected ? ' printed-sel' : '') + '" onclick="togglePrintedSel(\'' + item.id + '\')">' +
+        '<span class="printed-check">✓</span>' +
+        '<span class="printed-text">' + escapeHtml(label) + '</span>' +
+        '<button class="qi-prev' + (open ? ' active' : '') + '" onclick="event.stopPropagation();togglePrintedPreview(\'' + item.id + '\')" title="Preview">' + EYE_SVG + '</button>' +
+        '<span class="printed-time">' + (item.printedAt || '') + '</span>' +
+        '</div>');
+      if (open) rows.push(previewPanelHtml());
     });
-    rows.push(`<button class="btn-clear-printed" onclick="clearPrinted()">Clear history</button>`);
+    rows.push('<button class="btn-clear-printed" onclick="clearPrinted()">Clear history</button>');
   }
 
-  el.innerHTML = rows.join('');
-  if (qpOpenIdx >= 0 && queue[qpOpenIdx]) {
-    requestAnimationFrame(() => drawQueueFlag(queue[qpOpenIdx]));
-  } else if (qpOpenPrintedIdx >= 0 && printed[qpOpenPrintedIdx]) {
-    requestAnimationFrame(() => drawQueueFlag(printed[qpOpenPrintedIdx]));
-  }
+  listEl.innerHTML = rows.join('');
+
+  const openItem = findById(queue, appState.openPreviewId) ||
+                   findById(appState.printed, appState.openPrintedPreviewId);
+  if (openItem) requestAnimationFrame(() => renderFlag(FLAG_TARGETS.queue, specFromQueueItem(openItem)));
+
   saveState();
 }
 
-function clearPrinted() { printed = []; printedSelected.clear(); qpOpenPrintedIdx = -1; renderQueue(); }
+function findById(list, id) {
+  if (!id) return null;
+  for (let i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+  return null;
+}
 
-function loadPreset(idx) {
-  const item = queue[idx];
+// ═══════════════════════════════════════════════════
+//  QUEUE ACTIONS — all keyed by item id, never array index, so a delete
+//  cannot silently re-point a selection at a different label.
+// ═══════════════════════════════════════════════════
+function toggleSel(id) {
+  if (appState.selectedIds.has(id)) appState.selectedIds.delete(id);
+  else appState.selectedIds.add(id);
+  renderQueue();
+}
+
+function togglePrintedSel(id) {
+  if (appState.printedSelectedIds.has(id)) appState.printedSelectedIds.delete(id);
+  else appState.printedSelectedIds.add(id);
+  renderQueue();
+}
+
+function toggleQueuePreview(id) {
+  appState.openPreviewId = appState.openPreviewId === id ? null : id;
+  appState.openPrintedPreviewId = null;
+  renderQueue();
+}
+
+function togglePrintedPreview(id) {
+  appState.openPrintedPreviewId = appState.openPrintedPreviewId === id ? null : id;
+  appState.openPreviewId = null;
+  renderQueue();
+}
+
+function selectAll() {
+  appState.selectedIds = new Set(appState.queue.map(i => i.id));
+  renderQueue();
+}
+
+function clearSel() { appState.selectedIds.clear(); renderQueue(); }
+
+function removeItem(id) {
+  appState.queue = appState.queue.filter(i => i.id !== id);
+  appState.selectedIds.delete(id);
+  if (appState.openPreviewId === id) appState.openPreviewId = null;
+  renderQueue();
+}
+
+function deleteSelected() {
+  if (appState.selectedIds.size === 0) return;
+  appState.queue = appState.queue.filter(i => !appState.selectedIds.has(i.id));
+  if (!findById(appState.queue, appState.openPreviewId)) appState.openPreviewId = null;
+  appState.selectedIds.clear();
+  renderQueue();
+}
+
+function clearQueue() {
+  if (appState.queue.length === 0) return;
+  if (!confirm('Clear all ' + appState.queue.length + ' labels?')) return;
+  appState.queue = [];
+  appState.selectedIds.clear();
+  appState.openPreviewId = null;
+  renderQueue();
+  showToast('Queue cleared', 'warn');
+}
+
+function clearPrinted() {
+  appState.printed = [];
+  appState.printedSelectedIds.clear();
+  appState.openPrintedPreviewId = null;
+  renderQueue();
+}
+
+function reAddSelected() {
+  const moving = appState.printed.filter(i => appState.printedSelectedIds.has(i.id));
+  moving.forEach(item => {
+    const copy = Object.assign({}, item, { id: newItemId() });
+    delete copy.printedAt;
+    appState.queue.push(copy);
+  });
+  appState.printed = appState.printed.filter(i => !appState.printedSelectedIds.has(i.id));
+  appState.printedSelectedIds.clear();
+  appState.openPrintedPreviewId = null;
+  renderQueue();
+  showToast('Re-added to queue ✓');
+}
+
+// ═══════════════════════════════════════════════════
+//  LOAD PRESET — restore a queued label's settings into the form
+// ═══════════════════════════════════════════════════
+function loadPreset(id) {
+  const item = findById(appState.queue, id);
   if (!item) return;
+  const profile = PRINTER_PROFILES[item.profileId] || activeProfile();
 
-  const el = id => document.getElementById(id);
+  appState.profileId = item.profileId || DEFAULT_PROFILE_ID;
+  appState.fontSlider = item.fontSlider || 430;
+  appState.labelPaddingMm = item.labelPaddingMm || 0;
+  appState.cablePadMm = item.cablePadMm != null
+    ? item.cablePadMm : cablePadMmForDiameter(CABLE.defaultDiameterMm);
+  appState.cableDiameterMm = diameterMmForCablePad(appState.cablePadMm);
+  appState.boldEnabled = !!item.bold;
 
-  // Load sliders & dropdowns
-  fontSize = item.fontSize || 430;
-  labelPadding = item.labelPadding || 0;
-  cablePad = item.cablePad || 100;
-  el('font-size-slider').value = fontSize;
-  el('padding-slider').value = labelPadding;
-  el('cable-size').value = cablePad;
-  el('font-size-val').textContent = Math.round(fontSize / 8.42) + 'mm';
-  el('padding-val').textContent = labelPadding;
+  if (el('cfg-profile')) el('cfg-profile').value = appState.profileId;
+  el('font-size-slider').value = appState.fontSlider;
+  el('padding-slider').value = Math.round(appState.labelPaddingMm * dotsPerMm(profile));
+  el('cable-size').value = String(Math.round(appState.cableDiameterMm * 2) / 2);
+  setTwoLineLayout(item.twoLineLayout || 'side-by-side', true);
 
-  // Bold (global flag only — no DOM toggle)
-  boldEnabled = !!item.bold;
-
-  // MB toggle + style + text
-  mbEnabled = !!(item.mbText || item.mbStyle);
-  el('tgl-mb').className = 'tgl' + (mbEnabled ? ' on' : '');
-  el('mb-options').style.display = mbEnabled ? '' : 'none';
+  appState.mbEnabled = !!(item.bandText || item.mbStyle);
+  el('tgl-mb').className = 'tgl' + (appState.mbEnabled ? ' on' : '');
+  el('mb-options').style.display = appState.mbEnabled ? '' : 'none';
   setMBStyle(item.mbStyle || 'perp');
-  if (item.mbText) {
-    if (item.mbType === 'main' && el('mb-main-text')) el('mb-main-text').value = item.mbText;
-    if (item.mbType === 'back' && el('mb-back-text')) el('mb-back-text').value = item.mbText;
+  if (item.bandText) {
+    if (item.mbType === 'main' && el('mb-main-text')) el('mb-main-text').value = item.bandText;
+    if (item.mbType === 'back' && el('mb-back-text')) el('mb-back-text').value = item.bandText;
   }
 
-  // Show name
-  showNameEnabled = !!(item.showName);
-  el('tgl-sn').className = 'tgl' + (showNameEnabled ? ' on' : '');
-  el('sn-options').style.display = showNameEnabled ? '' : 'none';
+  appState.showNameEnabled = !!item.showName;
+  el('tgl-sn').className = 'tgl' + (appState.showNameEnabled ? ' on' : '');
+  el('sn-options').style.display = appState.showNameEnabled ? '' : 'none';
   if (item.showName && el('sn-text')) el('sn-text').value = item.showName;
-  showNameInvert = !!item.showNameInvert;
-  if (el('tgl-sn-invert')) el('tgl-sn-invert').className = 'tgl' + (showNameInvert ? ' on' : '');
+  appState.showNameInvert = !!item.showNameInvert;
+  if (el('tgl-sn-invert')) el('tgl-sn-invert').className = 'tgl' + (appState.showNameInvert ? ' on' : '');
 
-  // Restore form snapshot if available
   const snap = item.formSnapshot;
   if (snap) {
-    const sv = (id, val) => { const e = document.getElementById(id); if (e && val !== undefined) e.value = val; };
+    const set = (id2, v) => { const e = el(id2); if (e && v !== undefined) e.value = v; };
     setMode(snap.mode || 'alpha');
-    sv('copies', snap.copies || 1);
-    // Alpha
-    sv('alpha-method', snap.alphaMethod); renderAlphaMethod();
-    sv('alpha-from', snap.alphaFrom);
-    sv('alpha-to', snap.alphaTo);
-    sv('alpha-manual', snap.alphaManual);
-    // Numeric
-    sv('num-start', snap.numStart);
-    sv('num-end', snap.numEnd);
-    sv('num-pad', snap.numPad);
-    // Alphanumeric
-    sv('an-prefix', snap.anPrefix);
-    sv('an-sep', snap.anSep);
-    sv('an-stype', snap.anStype); renderANSeries();
-    sv('an-num-start', snap.anNumStart);
-    sv('an-num-end', snap.anNumEnd);
-    sv('an-num-pad', snap.anNumPad);
-    sv('an-alpha-from', snap.anAlphaFrom);
-    sv('an-alpha-to', snap.anAlphaTo);
-    // Two-line
-    sv('tl-line1', snap.tlLine1);
-    sv('tl-stype', snap.tlStype); renderTLSeries();
-    sv('tl-num-start', snap.tlNumStart);
-    sv('tl-num-end', snap.tlNumEnd);
-    sv('tl-num-pad', snap.tlNumPad);
-    sv('tl-alpha-from', snap.tlAlphaFrom);
-    sv('tl-alpha-to', snap.tlAlphaTo);
-    sv('tl-an-prefix', snap.tlAnPrefix);
-    sv('tl-an-start', snap.tlAnStart);
-    sv('tl-an-end', snap.tlAnEnd);
+    set('copies', snap.copies || 1);
+    set('alpha-method', snap.alphaMethod); renderAlphaMethod();
+    set('alpha-from', snap.alphaFrom); set('alpha-to', snap.alphaTo);
+    set('alpha-manual', snap.alphaManual);
+    set('num-start', snap.numStart); set('num-end', snap.numEnd); set('num-pad', snap.numPad);
+    set('an-prefix', snap.anPrefix); set('an-sep', snap.anSep);
+    set('an-stype', snap.anStype); renderANSeries();
+    set('an-num-start', snap.anNumStart); set('an-num-end', snap.anNumEnd);
+    set('an-num-pad', snap.anNumPad);
+    set('an-alpha-from', snap.anAlphaFrom); set('an-alpha-to', snap.anAlphaTo);
+    set('tl-line1', snap.tlLine1);
+    set('tl-stype', snap.tlStype); renderTLSeries();
+    set('tl-num-start', snap.tlNumStart); set('tl-num-end', snap.tlNumEnd);
+    set('tl-num-pad', snap.tlNumPad);
+    set('tl-alpha-from', snap.tlAlphaFrom); set('tl-alpha-to', snap.tlAlphaTo);
+    set('tl-an-prefix', snap.tlAnPrefix); set('tl-an-start', snap.tlAnStart);
+    set('tl-an-end', snap.tlAnEnd);
     setDominance(snap.tlDominance || 'l1');
+    setTwoLineLayout(snap.twoLineLayout || 'side-by-side', true);
     setMBStyle(snap.mbStyle || 'perp');
   }
 
+  syncDominanceAvailability();
   switchTab('build');
   updatePreview();
   showToast('Preset loaded ✓');
 }
 
-function toggleSel(idx) {
-  if (selected.has(idx)) selected.delete(idx); else selected.add(idx);
-  renderQueue();
-}
-function toggleQueuePreview(idx) {
-  qpOpenIdx = (qpOpenIdx === idx) ? -1 : idx;
-  qpOpenPrintedIdx = -1;
-  renderQueue();
-}
-function togglePrintedPreview(idx) {
-  qpOpenPrintedIdx = (qpOpenPrintedIdx === idx) ? -1 : idx;
-  qpOpenIdx = -1;
-  renderQueue();
-}
-function togglePrintedSel(idx) {
-  if (printedSelected.has(idx)) printedSelected.delete(idx); else printedSelected.add(idx);
-  renderQueue();
-}
-function reAddSelected() {
-  const indices = [...printedSelected].sort((a,b) => a-b);
-  indices.forEach(i => {
-    const item = {...printed[i]};
-    delete item.printedAt;
-    queue.push(item);
-  });
-  [...printedSelected].sort((a,b) => b-a).forEach(i => printed.splice(i,1));
-  printedSelected.clear();
-  if (qpOpenPrintedIdx >= 0) qpOpenPrintedIdx = -1;
-  renderQueue();
-  showToast('Re-added to queue ✓');
-}
-function selectAll() { selected = new Set(queue.map((_,i)=>i)); renderQueue(); }
-function clearSel() { selected.clear(); renderQueue(); }
-function removeItem(idx) { queue.splice(idx,1); selected.delete(idx); if (qpOpenIdx === idx) qpOpenIdx = -1; else if (qpOpenIdx > idx) qpOpenIdx--; renderQueue(); }
-function deleteSelected() {
-  if (selected.size === 0) return;
-  queue = queue.filter((_,i) => !selected.has(i));
-  selected.clear();
-  renderQueue();
-}
-function clearQueue() {
-  if (queue.length === 0) return;
-  if (!confirm('Clear all ' + queue.length + ' labels?')) return;
-  queue = []; selected.clear(); renderQueue();
-  showToast('Queue cleared', 'warn');
-}
-
 // ═══════════════════════════════════════════════════
 //  TOAST
 // ═══════════════════════════════════════════════════
-function showToast(msg, type='ok') {
-  const t = document.getElementById('toast');
+function showToast(msg, type = 'ok') {
+  const t = el('toast');
   t.textContent = msg;
   t.className = 'toast ' + type;
   t.style.display = '';
   clearTimeout(toastTimer);
-  // Re-trigger animation
   t.style.animation = 'none';
-  t.offsetHeight; // reflow
+  void t.offsetHeight;          // force reflow so the animation restarts
   t.style.animation = '';
-  toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2900);
+  toastTimer = setTimeout(() => { t.style.display = 'none'; }, TOAST_MS);
 }
 
 // ═══════════════════════════════════════════════════
-//  PRINTER TEST / STATUS — DEMO STUBS
+//  PRINT — simulated in demo mode
 // ═══════════════════════════════════════════════════
 function testPrinter() { showToast('Demo mode — no printer connected'); }
-function setStatus(s) { printerStatus = s; }
 
-// ═══════════════════════════════════════════════════
-//  PRINT — SIMULATED IN DEMO MODE
-// ═══════════════════════════════════════════════════
 async function printQueue() {
-  const toPrint = selected.size > 0 ? queue.filter((_,i) => selected.has(i)) : queue;
+  const toPrint = appState.selectedIds.size > 0
+    ? appState.queue.filter(i => appState.selectedIds.has(i.id))
+    : appState.queue.slice();
   if (toPrint.length === 0) { showToast('Queue is empty', 'err'); return; }
 
-  const fab = document.getElementById('fab-print');
+  const fab = el('fab-print');
   fab.disabled = true;
   fab.querySelector('span').textContent = 'Printing…';
 
   await new Promise(r => setTimeout(r, 1500));
 
-  showToast('⚡ Demo — simulated ' + toPrint.length + ' label' + (toPrint.length !== 1 ? 's' : '') + ' ✓');
-  const timeStr = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-  toPrint.forEach(item => printed.unshift({...item, printedAt: timeStr}));
-  if (printed.length > 50) printed = printed.slice(0, 50);
-  if (selected.size > 0) {
-    queue = queue.filter((_,i) => !selected.has(i));
-    selected.clear();
-  } else {
-    queue = [];
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  toPrint.forEach(item => appState.printed.unshift(Object.assign({}, item, { printedAt: timeStr })));
+  if (appState.printed.length > MAX_PRINT_HISTORY) {
+    appState.printed = appState.printed.slice(0, MAX_PRINT_HISTORY);
   }
-  if (qpOpenIdx >= 0 && qpOpenIdx >= queue.length) qpOpenIdx = -1;
+
+  const printedIds = new Set(toPrint.map(i => i.id));
+  appState.queue = appState.queue.filter(i => !printedIds.has(i.id));
+  appState.selectedIds.clear();
+  if (!findById(appState.queue, appState.openPreviewId)) appState.openPreviewId = null;
+
   renderQueue();
+  showToast('⚡ Demo — simulated ' + toPrint.length + ' label' + (toPrint.length !== 1 ? 's' : '') + ' ✓');
 
-  fab.disabled = queue.length === 0;
+  fab.disabled = appState.queue.length === 0;
   fab.querySelector('span').textContent = 'Print';
-}
-
-
-// ═══════════════════════════════════════════════════
-//  FLAG PREVIEW — DOM based, no canvas
-// ═══════════════════════════════════════════════════
-function drawFlag(line1, line2) {
-  const el1      = document.getElementById('flag-line1');
-  const el2      = document.getElementById('flag-line2');
-  const wrap     = document.getElementById('flag-text-wrap');
-  const mbBottom = document.getElementById('flag-mb-bottom');
-  const scene    = document.getElementById('flag-scene');
-  const flagBody = document.querySelector('.flag-body');
-  if (!el1) return;
-
-  const rawMbText = mbEnabled ? ((document.getElementById('mb-main-text') ? document.getElementById('mb-main-text').value : 'MAIN') || 'MAIN') : null;
-  // Inline mode: append MB text to label text, no perp band
-  if (rawMbText && mbStyle === 'inline') {
-    if (line2 && String(line2).trim()) line2 = String(line2).toUpperCase() + ' ' + rawMbText;
-    else line1 = String(line1).toUpperCase() + ' ' + rawMbText;
-  }
-  const mbText = (rawMbText && mbStyle === 'perp') ? rawMbText : null;
-  const hasTwo = !!(line2 && String(line2).trim());
-
-  // Scale: preview scene width (200px) represents tape width (320px)
-  const scale = 200 / 320;
-  const availW = scene ? scene.offsetWidth : 200;
-
-  // Font size: proportional to tape width in preview (no px cap)
-  // Dominance ratios for two-line mode
-  const dom = hasTwo ? tlDominance : 'l1';
-  const r1 = dom === 'l2' ? 0.30 : dom === 'equal' ? 0.46 : 0.62;
-  const r2 = dom === 'l1' ? 0.30 : dom === 'equal' ? 0.46 : 0.62;
-  const fsByTape1 = hasTwo ? Math.round(availW * r1) : Math.round(availW * 0.94);
-  const fsByTape2 = Math.round(availW * r2);
-  const sliderFrac = (fontSize - 200) / (500 - 200);  // 0.0 at min, 1.0 at max
-  const fs1 = Math.max(8, Math.round(fsByTape1 * (0.1 + 0.9 * sliderFrac)));
-  const fs2 = Math.max(6, Math.round(fsByTape2 * (0.1 + 0.9 * sliderFrac)));
-
-  // Let flag body size naturally from content — no forced height
-  if (flagBody) flagBody.style.height = '';
-
-  // Label padding applies equally to fold side AND gap-to-tag side (mirrors server layout)
-  const padTop = Math.round((10 + cablePad + labelPadding) * scale);
-  const gapToTag = Math.round((8 + labelPadding) * scale);
-
-  wrap.style.cssText = 'display:flex;flex-direction:row-reverse;align-items:flex-start;justify-content:center;gap:4px;width:100%;padding-top:' + padTop + 'px;padding-bottom:' + gapToTag + 'px;';
-
-  el1.style.cssText = 'writing-mode:vertical-lr;text-orientation:mixed;font-size:' + fs1 + 'px;font-family:"Barlow Condensed",sans-serif;font-weight:900;color:#111;line-height:1;text-align:center;transform:translateX(8px);';
-  el1.textContent = String(line1 || '—').toUpperCase();
-
-  if (hasTwo) {
-    el2.style.cssText = 'writing-mode:vertical-lr;text-orientation:mixed;text-align:center;font-size:' + fs2 + 'px;font-family:"Barlow Condensed",sans-serif;font-weight:700;color:#333;line-height:1;align-self:center;';
-    el2.textContent = String(line2).toUpperCase();
-    el2.style.display = '';
-  } else {
-    el2.style.display = 'none';
-    el2.textContent = '';
-  }
-
-  // MB tag: horizontal band at free end
-  if (mbEnabled && mbText && mbBottom) {
-    mbBottom.style.display = '';
-    mbBottom.style.fontSize = Math.round(availW * 0.22) + 'px';
-    mbBottom.textContent = mbText.toUpperCase();
-  } else if (mbBottom) {
-    mbBottom.style.display = 'none';
-  }
-
-  // Show name: outermost band at flag tip
-  const snEl = document.getElementById('flag-show-name');
-  const snText = showNameEnabled ? (document.getElementById('sn-text').value.trim().toUpperCase() || null) : null;
-  if (snEl) {
-    if (snText) {
-      snEl.style.display = '';
-      snEl.style.whiteSpace = 'nowrap';
-      // Fit font size so text stays on one line within the flag width
-      let snFs = Math.round(availW * 0.22);
-      snEl.style.fontSize = snFs + 'px';
-      snEl.textContent = snText;
-      while (snEl.scrollWidth > snEl.offsetWidth && snFs > 6) {
-        snFs--;
-        snEl.style.fontSize = snFs + 'px';
-      }
-      if (showNameInvert) {
-        snEl.style.background = '#111';
-        snEl.style.color = '#fff';
-        snEl.style.borderTop = 'none';
-        snEl.style.borderRadius = '2px';
-        snEl.style.width = 'calc(100% - 16px)';
-        snEl.style.margin = '4px 8px 4px';
-        snEl.style.padding = '4px 8px 3px';
-      } else {
-        snEl.style.background = '';
-        snEl.style.color = '';
-        snEl.style.borderTop = '';
-        snEl.style.borderRadius = '';
-        snEl.style.width = '';
-        snEl.style.margin = '';
-        snEl.style.padding = '';
-      }
-    } else {
-      snEl.style.display = 'none';
-    }
-  }
-}
-
-
-
-// ═══════════════════════════════════════════════════
-//  QUEUE ITEM PREVIEW (BOTTOM SHEET)
-// ═══════════════════════════════════════════════════
-function showQueuePreview(idx) {
-  const item = queue[idx];
-  if (!item) return;
-  const sheet = document.getElementById('qp-sheet');
-  const overlay = document.getElementById('qp-overlay');
-  const nameEl = document.getElementById('qp-label-name');
-
-  const label = item.twoLine ? (item.line1 + ' / ' + item.line2) : item.line1;
-  nameEl.textContent = label;
-
-  drawQueueFlag(item);
-
-  sheet.classList.add('open');
-  overlay.classList.add('open');
-}
-
-function closeQueuePreview() {
-  document.getElementById('qp-sheet').classList.remove('open');
-  document.getElementById('qp-overlay').classList.remove('open');
-}
-
-function drawQueueFlag(item) {
-  const el1      = document.getElementById('qp-line1');
-  const el2      = document.getElementById('qp-line2');
-  const wrap     = document.getElementById('qp-text-wrap');
-  const mbBottom = document.getElementById('qp-mb-bottom');
-  const scene    = document.getElementById('qp-scene');
-  const flagBody = document.getElementById('qp-body');
-  if (!el1) return;
-
-  const fs = item.fontSize || 430;
-  const cp = item.cablePad != null ? item.cablePad : 100;
-  const lp = item.labelPadding || 0;
-  const mbText = item.mbText || null;
-  const snText = item.showName ? item.showName.toUpperCase() : null;
-  const snInvert = !!item.showNameInvert;
-  const line2 = item.twoLine ? item.line2 : null;
-  const hasTwo = !!(line2 && String(line2).trim());
-
-  const scale = 200 / 320;
-  const availW = scene ? scene.offsetWidth : 200;
-  const dom = hasTwo ? (item.tlDominance || 'l1') : 'l1';
-  const r1 = dom === 'l2' ? 0.30 : dom === 'equal' ? 0.46 : 0.62;
-  const r2 = dom === 'l1' ? 0.30 : dom === 'equal' ? 0.46 : 0.62;
-  const fsByTape1 = hasTwo ? Math.round(availW * r1) : Math.round(availW * 0.94);
-  const fsByTape2 = Math.round(availW * r2);
-  const sliderFrac = (fs - 200) / (500 - 200);
-  const fs1 = Math.max(8, Math.round(fsByTape1 * (0.1 + 0.9 * sliderFrac)));
-  const fs2 = Math.max(6, Math.round(fsByTape2 * (0.1 + 0.9 * sliderFrac)));
-
-  if (flagBody) flagBody.style.height = '';
-
-  const padTop  = Math.round((10 + cp + lp) * scale);
-  const gapToTag = Math.round((8 + lp) * scale);
-
-  wrap.style.cssText = 'display:flex;flex-direction:row-reverse;align-items:flex-start;justify-content:center;gap:4px;width:100%;padding-top:' + padTop + 'px;padding-bottom:' + gapToTag + 'px;';
-
-  el1.style.cssText = 'writing-mode:vertical-lr;text-orientation:mixed;font-size:' + fs1 + 'px;font-family:"Barlow Condensed",sans-serif;font-weight:900;color:#111;line-height:1;text-align:center;transform:translateX(8px);';
-  el1.textContent = String(item.line1 || '—').toUpperCase();
-
-  if (hasTwo) {
-    el2.style.cssText = 'writing-mode:vertical-lr;text-orientation:mixed;text-align:center;font-size:' + fs2 + 'px;font-family:"Barlow Condensed",sans-serif;font-weight:700;color:#333;line-height:1;align-self:center;';
-    el2.textContent = String(line2).toUpperCase();
-    el2.style.display = '';
-  } else {
-    el2.style.display = 'none';
-    el2.textContent = '';
-  }
-
-  if (mbText && mbBottom) {
-    mbBottom.style.display = '';
-    mbBottom.style.fontSize = Math.round(availW * 0.22) + 'px';
-    mbBottom.textContent = mbText.toUpperCase();
-  } else if (mbBottom) {
-    mbBottom.style.display = 'none';
-  }
-
-  const snEl = document.getElementById('qp-show-name');
-  if (snEl) {
-    if (snText) {
-      snEl.style.display = '';
-      snEl.style.whiteSpace = 'nowrap';
-      let snFs = Math.round(availW * 0.22);
-      snEl.style.fontSize = snFs + 'px';
-      snEl.textContent = snText;
-      while (snEl.scrollWidth > snEl.offsetWidth && snFs > 6) {
-        snFs--;
-        snEl.style.fontSize = snFs + 'px';
-      }
-      if (snInvert) {
-        snEl.style.background = '#111';
-        snEl.style.color = '#fff';
-        snEl.style.borderTop = 'none';
-        snEl.style.borderRadius = '2px';
-        snEl.style.width = 'calc(100% - 16px)';
-        snEl.style.margin = '4px 8px 4px';
-        snEl.style.padding = '4px 8px 3px';
-      } else {
-        snEl.style.background = '';
-        snEl.style.color = '';
-        snEl.style.borderTop = '';
-        snEl.style.borderRadius = '';
-        snEl.style.width = '';
-        snEl.style.margin = '';
-        snEl.style.padding = '';
-      }
-    } else {
-      snEl.style.display = 'none';
-    }
-  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -1936,45 +2191,91 @@ function drawQueueFlag(item) {
 // ═══════════════════════════════════════════════════
 function saveState() {
   try {
-    localStorage.setItem('flaggit-queue', JSON.stringify(queue));
-    localStorage.setItem('flaggit-printed', JSON.stringify(printed.slice(0, 50)));
-  } catch(e) {}
+    localStorage.setItem(STORAGE_KEYS.queue, JSON.stringify(appState.queue));
+    localStorage.setItem(STORAGE_KEYS.printed,
+      JSON.stringify(appState.printed.slice(0, MAX_PRINT_HISTORY)));
+  } catch (e) { /* storage blocked or full — the queue is still usable in-session */ }
 }
+
+// Items saved before the id/mm refactor lack an id and use dot-based geometry.
+function migrateItem(item) {
+  if (!item.id) item.id = newItemId();
+  if (!item.profileId) item.profileId = DEFAULT_PROFILE_ID;
+  const profile = PRINTER_PROFILES[item.profileId] || PRINTER_PROFILES[DEFAULT_PROFILE_ID];
+  if (item.fontSlider == null) item.fontSlider = item.fontSize || 430;
+  if (item.cablePadMm == null) {
+    item.cablePadMm = (item.cablePad != null ? item.cablePad : 100) / dotsPerMm(profile);
+  }
+  if (item.twoLineLayout == null) item.twoLineLayout = 'side-by-side';
+  if (item.labelPaddingMm == null) {
+    item.labelPaddingMm = (item.labelPadding || 0) / dotsPerMm(profile);
+  }
+  if (item.bandText == null) item.bandText = item.mbText || null;
+  if (item.dominance == null) item.dominance = item.tlDominance || 'l1';
+  return item;
+}
+
 function restoreState() {
   try {
-    const q = localStorage.getItem('flaggit-queue');
-    const p = localStorage.getItem('flaggit-printed');
-    if (q) queue = JSON.parse(q);
-    if (p) printed = JSON.parse(p);
-  } catch(e) {}
+    const q = localStorage.getItem(STORAGE_KEYS.queue);
+    const p = localStorage.getItem(STORAGE_KEYS.printed);
+    if (q) appState.queue = JSON.parse(q).map(migrateItem);
+    if (p) appState.printed = JSON.parse(p).map(migrateItem);
+  } catch (e) { /* corrupt or absent — start empty rather than failing to load */ }
 }
-window.addEventListener('beforeunload', e => {
-  if (queue.length > 0) { e.preventDefault(); e.returnValue = ''; }
-});
+
+// ═══════════════════════════════════════════════════
+//  THEME
+// ═══════════════════════════════════════════════════
+function toggleTheme() {
+  const isLight = document.documentElement.classList.toggle('light');
+  el('btn-theme').textContent = isLight ? '☀️' : '🌙';
+  try { localStorage.setItem(STORAGE_KEYS.theme, isLight ? 'light' : 'dark'); } catch (e) {}
+}
+
+function initTheme() {
+  let stored = null;
+  try { stored = localStorage.getItem(STORAGE_KEYS.theme); } catch (e) {}
+  if (stored === 'light') {
+    document.documentElement.classList.add('light');
+    const btn = el('btn-theme');
+    if (btn) btn.textContent = '☀️';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  PROFILE SELECT population
+// ═══════════════════════════════════════════════════
+function populateProfileSelect() {
+  const sel = el('cfg-profile');
+  if (!sel) return;
+  sel.innerHTML = Object.keys(PRINTER_PROFILES)
+    .map(id => '<option value="' + id + '">' + PRINTER_PROFILES[id].label + '</option>')
+    .join('');
+  sel.value = appState.profileId;
+}
+
+function populateCableSelect() {
+  const sel = el('cable-size');
+  if (!sel) return;
+  sel.min = CABLE.minDiameterMm;
+  sel.max = CABLE.maxDiameterMm;
+  sel.step = 0.5;
+  sel.value = String(appState.cableDiameterMm);
+}
 
 // ═══════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════
+initTheme();
 loadSettings();
+populateProfileSelect();
+populateCableSelect();
 restoreState();
-updatePreview();
+setTwoLineLayout(activeProfile().defaultTwoLineLayout || 'side-by-side', true);
+onSliderChange();     // seeds geometry state from the controls, then previews
 renderQueue();
 switchTab('build');
-// Demo mode — no ping needed
-
-// ── THEME ──
-function toggleTheme() {
-  const isLight = document.documentElement.classList.toggle('light');
-  document.getElementById('btn-theme').textContent = isLight ? '☀️' : '🌙';
-  localStorage.setItem('flaggit-theme', isLight ? 'light' : 'dark');
-}
-(function initTheme() {
-  if (localStorage.getItem('flaggit-theme') === 'light') {
-    document.documentElement.classList.add('light');
-    const btn = document.getElementById('btn-theme');
-    if (btn) btn.textContent = '☀️';
-  }
-})();
 </script>
 
 </body>
