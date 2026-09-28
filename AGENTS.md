@@ -81,6 +81,29 @@ Font on the router: `/etc/gafflabel/font.ttc` (Barlow Condensed; index 0 regular
 index 1 bold). The `gafflabel` name is legacy — it is also still the localStorage
 settings key. Do not rename either without migrating.
 
+## Label styles
+
+Three ways a label meets a cable or a surface. All three on every printer.
+
+| Style | What it is | Geometry |
+|---|---|---|
+| `flag` | Tape folds back on itself and hangs off the cable | The original. Text rotated, reads along the flag; `sep` is the wrap gap and `cable_pad` the fold-side offset |
+| `wrap` | Tape goes round the cable, text repeats so a copy faces you at any rotation | `labelLength = turns × π × diameter`; `repeats = floor(labelLength / (textLength + gap))`. Readable at any angle needs `repeats ≥ turns`, i.e. at least one copy per revolution — the note warns when that fails rather than preventing it |
+| `sheet` | Tile many labels across a wide medium and cut them apart | `columns = floor((printableWidth − 2·edgeMargin + gutter) / (cellWidth + gutter))`, rows likewise down the length; `perSheet = columns × rows` |
+
+Defaults: `flag` everywhere except Rollo 4 in, which defaults to `sheet` because
+104 mm is absurd for one cable flag. Brother deliberately defaults to `flag`, not
+`wrap` — TZe-FX is rated for both, a flag reads faster during a load-in, and FLAG
+is the least surprising default for a public tool. WRAP is one tap away.
+
+The preview draws each style in its own scene. `sceneHtml(prefix)` emits all
+three with prefixed ids so the markup exists once and serves both the build panel
+and the queue row; `targetsFor(prefix)` derives the id map. `renderFlag()` is now
+a dispatcher over `renderFlagScene` / `renderWrapScene` / `renderSheetScene`.
+
+Wrap and sheet are **preview and planning only** at this point. Neither is
+implemented in the relay, which still emits a single Star flag raster.
+
 ## Geometry model
 
 The flag is printed as **two mirrored halves** separated by a blank gap, so that
@@ -179,13 +202,16 @@ Fixed in the demo:
   the relay on :9000. Corrected.
 
 Still open in the demo:
-- No N-up imposition for `layout: 'sheet'` profiles; Rollo 4 in only warns. Under
-  the rule above this should become a user-selectable layout, not a Rollo-only
-  mode: offer flag and sheet layouts wherever the media can carry them.
+- Wrap and sheet exist in the preview only; the relay cannot print either yet.
+  Porting them means a second and third raster path beside `make_label_perp`.
+- The sheet cell size is a fixed 25 × 60 mm placeholder (`SHEET.defaultCellLengthMm`
+  and a clamp on printable width). It should derive from the actual rendered label,
+  which needs the text-measurement the relay does with Pillow.
+- Wrap text length uses a 0.42 em-per-character estimate for condensed caps rather
+  than real metrics, so `repeats` is approximate. Fine for planning, not for the
+  raster.
 - `brother-24` now *defaults* to stacked, because side by side gives 6.4 / 3.1 mm
   where stacking gives 9.7 mm on both. Both remain available to the user.
-- Wrap-around (text repeated along the cable, no flag) is not implemented. It is
-  the fourth viable layout and the most durable one for permanent install work.
 - Only one face is drawn in the preview, deliberately: the author asked for an
   illustration of where the cable sits and the blank leader before the text, not
   a 3D fold. The hatched `.flag-wrap-zone` band does that. The relay still prints
@@ -224,8 +250,12 @@ own choice, never of the printer's. Warnings state the cost ("Side by side puts
 the second line at 1.7 mm — stacked would give 3.5 mm on both") instead of
 removing the option.
 
-Apply the same rule to anything added later: Rollo sheet vs flag layouts, N-up,
-wrap-around vs fold. Offer all viable options per printer.
+Applied again for label style: FLAG / WRAP / SHEET are all offered on every
+profile. `defaultLabelStyle` picks the starting point, nothing is disabled, and
+the scene notes state the cost (a sheet on 9.9 mm tape says "only fits one
+column — sheet mode saves nothing here" rather than greying the button).
+
+Apply the same rule to anything added later.
 
 ## JS baseline — ES6+, settled
 
